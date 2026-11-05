@@ -17,18 +17,132 @@
       "size_segment": "Compact / Golf-Klasse"
     },
     "models": [
-      {"make": "Volkswagen", "model": "Golf GTI"},
-      {"make": "BMW", "model": "120"},
-      {"make": "Cupra", "model": "Leon"},
-      {"make": "Audi", "model": "A3"},
-      {"make": "Mercedes-Benz", "model": "A-Klasse"},
-      {"make": "Hyundai", "model": "i30 N"}
+      {
+        "make": "Volkswagen",
+        "model": "Golf",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst Golf 8 Style, R-Line, GTI, GTE im Leistungsbereich 150-200 PS"
+      },
+      {
+        "make": "BMW",
+        "model": "1er",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst 118d, 120i, 120d, 128ti im Leistungsbereich 150-200 PS"
+      },
+      {
+        "make": "Cupra",
+        "model": "Leon",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst Leon 1.5 eTSI, 2.0 TSI und VZ e-Hybrid"
+      },
+      {
+        "make": "Audi",
+        "model": "A3",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst A3 35 TFSI, 40 TFSI, 35 TDI, 40 TFSIe (Sportback & Limousine)"
+      },
+      {
+        "make": "Mercedes-Benz",
+        "model": "A-Klasse",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst A 200, A 220, A 250e (Kompaktlimousine & Limousine)"
+      },
+      {
+        "make": "Hyundai",
+        "model": "i30",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Erfasst i30 N-Line, Fastback und Hatchback ab 150 PS"
+      },
+      {
+        "make": "Skoda",
+        "model": "Octavia",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Kompaktplattform MQB, z. B. Style / First Edition / RS iV bis 200 PS"
+      },
+      {
+        "make": "Seat",
+        "model": "Leon",
+        "reference_segment": "Golf-Klasse",
+        "notes": "Ergänzend zu Cupra für FR-Ausstattungslinien mit 150 PS"
+      }
     ],
     "desired_features": [
-      {"id": "acc", "name": "ACC / Adaptiver Tempomat", "keywords": ["acc", "abstandstempomat", "adaptiver tempomat", "distronic", "adaptive cruise control"]},
-      {"id": "led", "name": "LED-Scheinwerfer", "keywords": ["led", "matrix", "voll-led", "led-scheinwerfer", "laserlight", "multibeam"]},
-      {"id": "carplay", "name": "Apple CarPlay", "keywords": ["carplay", "apple carplay", "smartphone integration", "app-connect"]},
-      {"id": "seat_heating", "name": "Sitzheizung", "keywords": ["sitzheizung", "heated seats", "beheizbare vordersitze"]}
+      {
+        "id": "matrix_led",
+        "name": "Matrix LED-Scheinwerfer",
+        "keywords": [
+          "matrix",
+          "matrix led",
+          "iq.light",
+          "iq light",
+          "multibeam",
+          "laserlight",
+          "adaptive led",
+          "blendfreies fernlicht",
+          "fernlichtassistent"
+        ]
+      },
+      {
+        "id": "massage_seats",
+        "name": "Massagesitz / ErgoActive",
+        "keywords": [
+          "massage",
+          "massagesitz",
+          "massagesitze",
+          "ergoactive",
+          "ergocomfort",
+          "multikontursitz",
+          "aktivsitz"
+        ]
+      },
+      {
+        "id": "climate_2zone",
+        "name": "Mind. 2-Zonen Klimaautomatik",
+        "keywords": [
+          "2-zonen",
+          "2 zonen",
+          "3-zonen",
+          "3 zonen",
+          "climatronic",
+          "thermotronic",
+          "klimaautomatik 2-zonen",
+          "mehrzonen-klimaautomatik",
+          "deluxe-klimaautomatik"
+        ]
+      },
+      {
+        "id": "acc",
+        "name": "ACC / Adaptiver Tempomat",
+        "keywords": [
+          "acc",
+          "abstandstempomat",
+          "adaptiver tempomat",
+          "distronic",
+          "adaptive cruise control",
+          "travel assist",
+          "driving assistant"
+        ]
+      },
+      {
+        "id": "carplay",
+        "name": "Apple CarPlay",
+        "keywords": [
+          "carplay",
+          "apple carplay",
+          "smartphone integration",
+          "app-connect",
+          "wireless carplay"
+        ]
+      },
+      {
+        "id": "seat_heating",
+        "name": "Sitzheizung",
+        "keywords": [
+          "sitzheizung",
+          "heated seats",
+          "beheizbare vordersitze"
+        ]
+      }
     ]
   },
   "scoring_weights": {
