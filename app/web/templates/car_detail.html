@@ -66,29 +66,32 @@
     <!-- Linke Spalte: Teil-Scores, Vor-/Nachteile, Marktvergleich -->
     <div class="lg:col-span-2 space-y-6">
 
-      <!-- Teil-Scores Matrix -->
+      <!-- Teil-Scores Matrix (8 Kriterien inkl. Verbrauch & Lackierung) -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
           <i class="fa-solid fa-chart-pie text-blue-400"></i> Nachvollziehbare Deal-Score Aufschlüsselung
         </h2>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- 1. Marktpreis (22%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Marktpreis (25%)</span>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Marktpreis (22%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('market_price', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
               <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('market_price', 0) }}%"></div>
             </div>
           </div>
 
+          <!-- 2. Ausstattung (23%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Ausstattung (20%)</span>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Ausstattung (23%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('features', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
               <div class="bg-indigo-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('features', 0) }}%"></div>
             </div>
           </div>
 
+          <!-- 3. Laufleistung (15%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
             <span class="text-[10px] uppercase text-slate-400 font-semibold block">Laufleistung (15%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('mileage', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
@@ -97,24 +100,51 @@
             </div>
           </div>
 
+          <!-- 4. Spritverbrauch (10%) - NEU -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Alter / Baujahr (10%)</span>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
+              <span>Verbrauch (10%)</span>
+              <i class="fa-solid fa-gas-pump text-teal-400 text-[11px]"></i>
+            </span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('consumption', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-teal-400 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('consumption', 0) }}%"></div>
+            </div>
+          </div>
+
+          <!-- 5. Alter / Baujahr (8%) -->
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Baujahr (8%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('age', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
               <div class="bg-purple-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('age', 0) }}%"></div>
             </div>
           </div>
 
+          <!-- 6. Leistung PS (7%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Leistung PS (10%)</span>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Leistung (7%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('power', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
               <div class="bg-amber-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('power', 0) }}%"></div>
             </div>
           </div>
 
+          <!-- 7. Lackierung / Farbe (5%) - NEU -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Entfernung (10%)</span>
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
+              <span>Farbe (5%)</span>
+              <i class="fa-solid fa-palette text-cyan-400 text-[11px]"></i>
+            </span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('color_preference', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-gradient-to-r from-blue-500 to-rose-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('color_preference', 0) }}%"></div>
+            </div>
+          </div>
+
+          <!-- 8. Distanz (5%) -->
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Distanz (5%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('distance', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
               <div class="bg-rose-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('distance', 0) }}%"></div>

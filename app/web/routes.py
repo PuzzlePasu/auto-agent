@@ -10,7 +10,7 @@ from app.services.pdf_export import PdfExportService
 
 router = APIRouter()
 
-# Absoluter Pfad zu den Templates – verhindert Pfad-Fehler im Container
+# Absoluter Pfad zu den Templates – verhindert Pfad-Fehler im Docker-Container
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -186,12 +186,16 @@ async def download_car_pdf(car_id: int):
     price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
 
     pdf_bytes = PdfExportService.generate_car_report(car, price_metrics, days_online)
-    safe_title = f"{car.make}-{car.model}-{car.id}".replace(" ", "_").lower()
+
+    # Dateiname mit gerundetem Deal-Score (z.B. auto-agent-score94-bmw-128ti-1.pdf)
+    score_tag = f"score{int(round(car.deal_score))}"
+    safe_make_model = f"{car.make}-{car.model}".replace(" ", "_").lower()
+    filename = f"auto-agent-{score_tag}-{safe_make_model}-{car.id}.pdf"
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="auto-agent-{safe_title}.pdf"'}
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
@@ -235,7 +239,11 @@ async def download_compare_pdf(id1: int = Query(...), id2: int = Query(...)):
     }
 
     pdf_bytes = PdfExportService.generate_comparison_report(car1, car2, comparison_results)
-    filename = f"vergleich-{car1.make}-{car1.model}-vs-{car2.make}-{car2.model}.pdf".replace(" ", "_").lower()
+
+    # Dateiname mit beiden Scores (z.B. vergleich-score94-bmw-128ti-vs-score88-volkswagen-golf.pdf)
+    c1_tag = f"score{int(round(car1.deal_score))}-{car1.make}-{car1.model}".replace(" ", "_").lower()
+    c2_tag = f"score{int(round(car2.deal_score))}-{car2.make}-{car2.model}".replace(" ", "_").lower()
+    filename = f"vergleich-{c1_tag}-vs-{c2_tag}.pdf"
 
     return Response(
         content=pdf_bytes,
