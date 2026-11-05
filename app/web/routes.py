@@ -68,20 +68,27 @@ async def dashboard(
     top_deals = sorted(all_active, key=lambda x: x.deal_score, reverse=True)[:3]
     recent_logs = repo.get_recent_logs(5)
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
         "cars": cars,
         "top_deals": top_deals,
         "current_tab": tab,
         "sort_by": sort_by,
         "filters": {
-            "make": make or "", "model": model or "", "min_score": min_score or "",
-            "max_price": max_price or "", "max_mileage": max_mileage or "",
-            "min_year": min_year or "", "provider": provider or ""
+            "make": make or "",
+            "model": model or "",
+            "min_score": min_score or "",
+            "max_price": max_price or "",
+            "max_mileage": max_mileage or "",
+            "min_year": min_year or "",
+            "provider": provider or ""
         },
         "recent_logs": recent_logs,
         "total_active_count": len(all_active)
-    })
+        }
+    )
 
 @router.get("/car/{car_id}", response_class=HTMLResponse)
 async def car_details(request: Request, car_id: int):

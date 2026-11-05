@@ -9,18 +9,23 @@
       <i class="fa-solid fa-arrow-left"></i> Zurück zum Dashboard
     </a>
     <div class="flex items-center gap-3">
-      <button onclick="toggleFavorite({{ car.id }}, this)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-2">
+      <!-- PDF-Export Button -->
+      <a href="/car/{{ car.id }}/pdf" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition flex items-center gap-2 border border-slate-700 shadow-sm">
+        <i class="fa-solid fa-file-pdf text-rose-500"></i>
+        <span>PDF-Report</span>
+      </a>
+
+      <!-- Favoriten-Toggle -->
+      <button onclick="toggleFavorite({{ car.id }}, this)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-2 border border-slate-700">
         <i class="fa-{% if car.is_favorite %}solid text-rose-500{% else %}regular text-slate-400{% endif %} fa-heart"></i>
         <span>Favorit</span>
       </button>
+
+      <!-- Original-Inserat -->
       <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
         <i class="fa-solid fa-arrow-up-right-from-square"></i>
         <span>Original-Inserat auf {{ car.provider }}</span>
       </a>
-	  <a href="/car/{{ car.id }}/pdf" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition flex items-center gap-2 border border-slate-700">
-		<i class="fa-solid fa-file-pdf text-rose-500"></i>
-		<span>PDF-Report</span>
-	  </a>
     </div>
   </div>
 
@@ -35,11 +40,11 @@
       </div>
       <h1 class="text-2xl font-black text-white leading-tight mb-2">{{ car.title }}</h1>
       <p class="text-xs text-slate-400">
-        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name }}</span>
+        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name or 'Privatanbieter' }}</span>
       </p>
     </div>
 
-    <div class="flex items-center gap-6 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+    <div class="flex items-center gap-6 bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex-shrink-0">
       <div class="text-right">
         <div class="text-3xl font-black text-white">{{ "{:,.0f}".format(car.price).replace(",", ".") }} €</div>
         {% if car.duplicate_info %}
@@ -197,6 +202,8 @@
           <span class="px-3 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs font-medium text-slate-200">
             <i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> {{ f }}
           </span>
+          {% else %}
+          <span class="text-slate-500 text-xs italic">Keine Ausstattungsmerkmale hinterlegt.</span>
           {% endfor %}
         </div>
       </div>
@@ -214,14 +221,14 @@
         <div class="space-y-3 text-xs">
           <div class="flex justify-between py-2 border-b border-slate-800">
             <span class="text-slate-400">Erstmals entdeckt:</span>
-            <span class="font-semibold text-slate-200">{{ car.first_seen }}</span>
+            <span class="font-semibold text-slate-200">{{ car.first_seen if car.first_seen else 'Neu' }}</span>
           </div>
           <div class="flex justify-between py-2 border-b border-slate-800">
             <span class="text-slate-400">Zuletzt aktualisiert:</span>
-            <span class="font-semibold text-slate-200">{{ car.last_seen }}</span>
+            <span class="font-semibold text-slate-200">{{ car.last_seen if car.last_seen else 'Neu' }}</span>
           </div>
           <div class="flex justify-between py-2 border-b border-slate-800">
-            <span class="text-slate-400">Standzeit / Beobachtungsdauer:</span>
+            <span class="text-slate-400">Standzeit / Beobachtung:</span>
             <span class="font-bold text-amber-400">Seit {{ days_online }} Tagen online</span>
           </div>
           <div class="flex justify-between py-2">
@@ -245,9 +252,11 @@
         <div class="space-y-2 text-xs">
           {% for p in price_history %}
           <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
-            <span class="text-slate-400">{{ p.recorded_at[:10] }}</span>
+            <span class="text-slate-400">{{ p.recorded_at[:10] if p.recorded_at else '-' }}</span>
             <span class="font-bold text-white">{{ "{:,.0f}".format(p.price).replace(",", ".") }} €</span>
           </div>
+          {% else %}
+          <div class="text-slate-500 text-xs italic">Keine vorherigen Preisänderungen.</div>
           {% endfor %}
         </div>
       </div>

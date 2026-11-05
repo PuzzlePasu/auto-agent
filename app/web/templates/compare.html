@@ -3,7 +3,8 @@
 {% block content %}
 <div class="space-y-8">
 
-  <div class="flex items-center justify-between">
+  <!-- Kopfzeile mit PDF-Export Button -->
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
     <div>
       <h1 class="text-2xl font-black text-white flex items-center gap-2">
         <i class="fa-solid fa-code-compare text-indigo-400"></i> Fahrzeug-Direktvergleich
@@ -17,8 +18,8 @@
     </a>
     {% endif %}
   </div>
-  
-  <!-- Auswahldialog -->
+
+  <!-- Fahrzeugauswahl-Formular -->
   <form method="GET" class="glass-card rounded-2xl p-5 border border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
       <label class="block text-xs font-semibold text-slate-400 mb-1">Fahrzeug 1 wählen</label>
@@ -55,6 +56,7 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800/70 text-slate-300">
+        <!-- Deal Score -->
         <tr class="bg-slate-900/30">
           <td class="p-4 font-semibold text-slate-400">Deal-Score (0 - 100)</td>
           <td class="p-4 font-black text-lg {% if car1.deal_score > car2.deal_score %}text-emerald-400{% else %}text-slate-300{% endif %}">
@@ -65,6 +67,7 @@
           </td>
         </tr>
 
+        <!-- Kaufpreis -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Kaufpreis</td>
           <td class="p-4 font-bold text-white text-base {% if car1.price < car2.price %}text-emerald-400{% endif %}">
@@ -75,6 +78,7 @@
           </td>
         </tr>
 
+        <!-- Marktpreis-Abweichung -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Marktpreis-Abweichung</td>
           <td class="p-4 font-semibold {% if car1.market_stats.diff_to_median < 0 %}text-emerald-400{% endif %}">
@@ -85,6 +89,7 @@
           </td>
         </tr>
 
+        <!-- Laufleistung -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Laufleistung</td>
           <td class="p-4 font-semibold {% if car1.mileage < car2.mileage %}text-emerald-400{% endif %}">
@@ -95,6 +100,7 @@
           </td>
         </tr>
 
+        <!-- Leistung & Getriebe -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Leistung / Getriebe</td>
           <td class="p-4 font-semibold {% if car1.power_hp > car2.power_hp %}text-emerald-400{% endif %}">
@@ -105,12 +111,14 @@
           </td>
         </tr>
 
+        <!-- Erstzulassung -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Erstzulassung</td>
           <td class="p-4 font-semibold">{{ car1.first_registration_year }}</td>
           <td class="p-4 font-semibold">{{ car2.first_registration_year }}</td>
         </tr>
 
+        <!-- Entfernung -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Entfernung (von Kleinrinderfeld)</td>
           <td class="p-4 font-semibold {% if car1.distance_km < car2.distance_km %}text-emerald-400{% endif %}">
@@ -121,12 +129,14 @@
           </td>
         </tr>
 
+        <!-- Ausstattungsumfang -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Ausstattungsumfang</td>
           <td class="p-4">{{ car1.features|length }} dokumentierte Merkmale</td>
           <td class="p-4">{{ car2.features|length }} dokumentierte Merkmale</td>
         </tr>
 
+        <!-- Detailansicht-Link -->
         <tr>
           <td class="p-4 font-semibold text-slate-400">Aktion</td>
           <td class="p-4">
