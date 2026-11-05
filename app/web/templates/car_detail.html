@@ -29,7 +29,53 @@
     </div>
   </div>
 
-  <!-- Kopfbereich mit Gesamt-Score -->
+  <!-- Durchklickbare Fotogalerie -->
+  {% set gallery = car.images if (car.images and car.images|length > 0) else ([car.image_url] if car.image_url else []) %}
+  <div class="glass-card rounded-2xl p-4 border border-slate-800">
+    {% if gallery %}
+    <div class="relative w-full h-[320px] sm:h-[460px] rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-800 group">
+      <!-- Hauptbild -->
+      <img id="mainGalleryImg" src="{{ gallery[0] }}" alt="{{ car.title }}" class="w-full h-full object-cover transition-opacity duration-200">
+      
+      <!-- Anbieter-Badge & Zähler -->
+      <span class="absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-slate-900/90 text-slate-300 border border-slate-700 shadow">
+        {{ car.provider }}
+      </span>
+      
+      <span id="galleryCounter" class="absolute bottom-3 right-3 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-950/80 text-slate-300 border border-slate-800 backdrop-blur">
+        1 / {{ gallery|length }}
+      </span>
+
+      {% if gallery|length > 1 %}
+      <!-- Navigation Pfeile -->
+      <button onclick="changeSlide(-1)" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white flex items-center justify-center backdrop-blur border border-slate-700 transition opacity-0 group-hover:opacity-100 shadow-lg" title="Vorheriges Foto (Pfeiltaste Links)">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <button onclick="changeSlide(1)" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white flex items-center justify-center backdrop-blur border border-slate-700 transition opacity-0 group-hover:opacity-100 shadow-lg" title="Nächstes Foto (Pfeiltaste Rechts)">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+      {% endif %}
+    </div>
+
+    {% if gallery|length > 1 %}
+    <!-- Thumbnail-Leiste -->
+    <div class="flex items-center gap-2.5 mt-3 overflow-x-auto pb-2 scrollbar-thin">
+      {% for img_url in gallery %}
+      <button onclick="setSlide({{ loop.index0 }})" class="thumb-btn flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 {% if loop.first %}border-blue-500 scale-105{% else %}border-transparent opacity-60 hover:opacity-100{% endif %} transition duration-150">
+        <img src="{{ img_url }}" class="w-full h-full object-cover" alt="Vorschau {{ loop.index }}">
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="w-full h-48 rounded-xl bg-slate-900 flex items-center justify-center text-slate-500 text-xs italic">
+      Keine Fahrzeugfotos verfügbar.
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Kopfbereich mit Stammdaten & Deal-Score -->
   <div class="glass-card rounded-2xl p-6 border border-slate-800 flex flex-col md:flex-row gap-6 items-start justify-between">
     <div>
       <div class="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">
@@ -40,7 +86,7 @@
       </div>
       <h1 class="text-2xl font-black text-white leading-tight mb-2">{{ car.title }}</h1>
       <p class="text-xs text-slate-400">
-        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name or 'Privatanbieter' }}</span>
+        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name or 'Autohaus' }}</span>
       </p>
     </div>
 
@@ -63,10 +109,10 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- Linke Spalte: Teil-Scores, Vor-/Nachteile, Marktvergleich -->
+    <!-- Linke 2 Spalten: Teil-Scores, Vor-/Nachteile, Marktvergleich -->
     <div class="lg:col-span-2 space-y-6">
 
-      <!-- Teil-Scores Matrix (8 Kriterien inkl. Verbrauch & Lackierung) -->
+      <!-- Teil-Scores Matrix (8 Kriterien) -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
           <i class="fa-solid fa-chart-pie text-blue-400"></i> Nachvollziehbare Deal-Score Aufschlüsselung
@@ -100,7 +146,7 @@
             </div>
           </div>
 
-          <!-- 4. Spritverbrauch (10%) - NEU -->
+          <!-- 4. Spritverbrauch (10%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
             <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
               <span>Verbrauch (10%)</span>
@@ -112,7 +158,7 @@
             </div>
           </div>
 
-          <!-- 5. Alter / Baujahr (8%) -->
+          <!-- 5. Baujahr / Alter (8%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
             <span class="text-[10px] uppercase text-slate-400 font-semibold block">Baujahr (8%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('age', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
@@ -121,7 +167,7 @@
             </div>
           </div>
 
-          <!-- 6. Leistung PS (7%) -->
+          <!-- 6. Leistung (7%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
             <span class="text-[10px] uppercase text-slate-400 font-semibold block">Leistung (7%)</span>
             <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('power', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
@@ -130,7 +176,7 @@
             </div>
           </div>
 
-          <!-- 7. Lackierung / Farbe (5%) - NEU -->
+          <!-- 7. Lackierung / Farbe (5%) -->
           <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
             <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
               <span>Farbe (5%)</span>
@@ -240,7 +286,7 @@
 
     </div>
 
-    <!-- Rechte Spalte: Standzeit & Preishistorie -->
+    <!-- Rechte 1 Spalte: Standzeit & Preishistorie -->
     <div class="space-y-6">
 
       <div class="glass-card rounded-2xl p-6 border border-slate-800">
@@ -296,4 +342,54 @@
   </div>
 
 </div>
+
+<!-- JavaScript für interaktive Galerie & Tastatursteuerung -->
+<script>
+  const galleryImages = {{ gallery|tojson if gallery else '[]' }};
+  let currentSlide = 0;
+
+  function updateGalleryUI() {
+    const mainImg = document.getElementById('mainGalleryImg');
+    const counter = document.getElementById('galleryCounter');
+    const thumbs = document.querySelectorAll('.thumb-btn');
+
+    if (!mainImg || galleryImages.length === 0) return;
+
+    mainImg.style.opacity = '0.35';
+    setTimeout(() => {
+      mainImg.src = galleryImages[currentSlide];
+      mainImg.style.opacity = '1';
+    }, 100);
+
+    if (counter) {
+      counter.innerText = `${currentSlide + 1} / ${galleryImages.length}`;
+    }
+
+    thumbs.forEach((thumb, idx) => {
+      if (idx === currentSlide) {
+        thumb.classList.remove('border-transparent', 'opacity-60');
+        thumb.classList.add('border-blue-500', 'scale-105');
+      } else {
+        thumb.classList.remove('border-blue-500', 'scale-105');
+        thumb.classList.add('border-transparent', 'opacity-60');
+      }
+    });
+  }
+
+  function changeSlide(direction) {
+    if (galleryImages.length <= 1) return;
+    currentSlide = (currentSlide + direction + galleryImages.length) % galleryImages.length;
+    updateGalleryUI();
+  }
+
+  function setSlide(index) {
+    currentSlide = index;
+    updateGalleryUI();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') changeSlide(-1);
+    if (e.key === 'ArrowRight') changeSlide(1);
+  });
+</script>
 {% endblock %}

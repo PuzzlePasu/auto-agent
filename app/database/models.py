@@ -37,6 +37,8 @@ class CarListing:
     market_stats: Dict[str, Any] = field(default_factory=dict)
     pros: List[str] = field(default_factory=list)
     cons: List[str] = field(default_factory=list)
+    image_url: str = ""
+    images: List[str] = field(default_factory=list)  # Liste aller verfügbaren Fotos
 
 @dataclass
 class PriceRecord:

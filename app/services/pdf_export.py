@@ -1,16 +1,34 @@
 import io
+import requests
 from datetime import datetime
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from app.database.models import CarListing
 
 class PdfExportService:
+    @staticmethod
+    def _fetch_image(image_url: str, width_mm: float = 48, height_mm: float = 34):
+        """Lädt das Fahrzeugbild in den Speicher und skaliert es für ReportLab."""
+        if not image_url:
+            return None
+        try:
+            resp = requests.get(image_url, timeout=3.5, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            })
+            if resp.status_code == 200:
+                img_stream = io.BytesIO(resp.content)
+                img = RLImage(img_stream, width=width_mm * mm, height=height_mm * mm)
+                return img
+        except Exception:
+            pass
+        return None
+
     @staticmethod
     def generate_car_report(car: CarListing, price_metrics: dict, days_online: int) -> bytes:
         buffer = io.BytesIO()
@@ -19,8 +37,8 @@ class PdfExportService:
             pagesize=A4,
             leftMargin=14 * mm,
             rightMargin=14 * mm,
-            topMargin=12 * mm,
-            bottomMargin=12 * mm
+            topMargin=10 * mm,
+            bottomMargin=10 * mm
         )
 
         styles = getSampleStyleSheet()
@@ -29,24 +47,24 @@ class PdfExportService:
             'HeaderTitle',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=15,
-            leading=18,
+            fontSize=13,
+            leading=16,
             textColor=colors.HexColor('#0f172a')
         )
         style_subtitle = ParagraphStyle(
             'HeaderSubtitle',
             parent=styles['Normal'],
             fontName='Helvetica',
-            fontSize=8.5,
-            leading=11,
+            fontSize=7.5,
+            leading=10,
             textColor=colors.HexColor('#64748b')
         )
         style_score = ParagraphStyle(
             'ScoreText',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=22,
-            leading=24,
+            fontSize=20,
+            leading=22,
             alignment=TA_CENTER,
             textColor=colors.HexColor('#047857') if car.deal_score >= 88 else colors.HexColor('#1d4ed8')
         )
@@ -54,8 +72,8 @@ class PdfExportService:
             'ScoreLabel',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=7.5,
-            leading=9,
+            fontSize=7,
+            leading=8.5,
             alignment=TA_CENTER,
             textColor=colors.HexColor('#475569')
         )
@@ -63,89 +81,90 @@ class PdfExportService:
             'SectionHeader',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=10,
-            leading=13,
+            fontSize=9.5,
+            leading=12,
             textColor=colors.HexColor('#1e293b')
         )
         style_body = ParagraphStyle(
             'BodySmall',
             parent=styles['Normal'],
             fontName='Helvetica',
-            fontSize=8,
-            leading=11,
+            fontSize=7.5,
+            leading=10.5,
             textColor=colors.HexColor('#334155')
         )
         style_bold = ParagraphStyle(
             'BodySmallBold',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=8,
-            leading=11,
+            fontSize=7.5,
+            leading=10.5,
             textColor=colors.HexColor('#0f172a')
         )
         style_pro = ParagraphStyle(
             'ProItem',
             parent=styles['Normal'],
             fontName='Helvetica',
-            fontSize=8,
-            leading=11,
+            fontSize=7.5,
+            leading=10.5,
             textColor=colors.HexColor('#065f46')
         )
         style_con = ParagraphStyle(
             'ConItem',
             parent=styles['Normal'],
             fontName='Helvetica',
-            fontSize=8,
-            leading=11,
+            fontSize=7.5,
+            leading=10.5,
             textColor=colors.HexColor('#991b1b')
         )
 
         elements = []
 
         # -------------------------------------------------------------
-        # 1. HEADER-BLOCK (Titel links + Deal-Score rechts)
+        # 1. HEADER-BLOCK (Bild links + Titel mitte + Score rechts)
         # -------------------------------------------------------------
-        title_text = f"<b>{car.make} {car.model}</b> &bull; {car.title}"
-        sub_text = (
-            f"Standort: {car.postal_code} {car.city} (~{round(car.distance_km, 1)} km von 97271 Kleinrinderfeld) | "
-            f"Händler: {car.dealer_name or 'Händler'} | Quelle: {car.provider}"
-        )
-        left_header = [
-            Paragraph("AUTO-AGENT &bull; KAUFBERATER-REPORT", ParagraphStyle('Pre', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#2563eb'))),
-            Spacer(1, 2 * mm),
-            Paragraph(title_text, style_title),
+        car_img = PdfExportService._fetch_image(car.image_url, width_mm=46, height_mm=32)
+
+        mid_text = [
+            Paragraph("AUTO-AGENT &bull; KAUFBERATER-REPORT", ParagraphStyle('Pre', fontName='Helvetica-Bold', fontSize=7.5, textColor=colors.HexColor('#2563eb'))),
             Spacer(1, 1.5 * mm),
-            Paragraph(sub_text, style_subtitle)
+            Paragraph(f"<b>{car.make} {car.model}</b> &bull; {car.title}", style_title),
+            Spacer(1, 1.5 * mm),
+            Paragraph(f"Standort: {car.postal_code} {car.city} (~{round(car.distance_km, 1)} km) | Händler: {car.dealer_name or 'Autohaus'} | Quelle: {car.provider}", style_subtitle)
         ]
 
         score_box_data = [
-            [Paragraph(f"{car.deal_score} <font size=9>/ 100</font>", style_score)],
+            [Paragraph(f"{car.deal_score} <font size=8>/ 100</font>", style_score)],
             [Paragraph("DEAL-SCORE", style_score_label)],
-            [Paragraph(f"<b>{int(car.price):,} €</b>".replace(",", "."), ParagraphStyle('Price', alignment=TA_CENTER, fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#0f172a')))]
+            [Paragraph(f"<b>{int(car.price):,} €</b>".replace(",", "."), ParagraphStyle('Price', alignment=TA_CENTER, fontName='Helvetica-Bold', fontSize=10.5, textColor=colors.HexColor('#0f172a')))]
         ]
-        score_table = Table(score_box_data, colWidths=[38 * mm])
+        score_table = Table(score_box_data, colWidths=[34 * mm])
         score_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f5f9')),
             ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#cbd5e1')),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ]))
 
-        header_table = Table([[left_header, score_table]], colWidths=[142 * mm, 40 * mm])
+        if car_img:
+            header_table = Table([[car_img, mid_text, score_table]], colWidths=[48 * mm, 98 * mm, 36 * mm])
+        else:
+            header_table = Table([[mid_text, score_table]], colWidths=[146 * mm, 36 * mm])
+
         header_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ]))
         elements.append(header_table)
         elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
-        # 2. FAHRZEUGDATEN & TEIL-SCORES TABELLE (inkl. Verbrauch & Farbe)
+        # 2. FAHRZEUGDATEN & TEIL-SCORES TABELLE
         # -------------------------------------------------------------
         elements.append(Paragraph("Fahrzeug-Eckdaten &amp; Teil-Scores (8 Kriterien)", style_sec_header))
-        elements.append(Spacer(1, 1.5 * mm))
+        elements.append(Spacer(1, 1.2 * mm))
 
         subs = car.sub_scores or {}
         specs_data = [
@@ -187,17 +206,17 @@ class PdfExportService:
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
             ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#f1f5f9')),
-            ('TOPPADDING', (0, 0), (-1, -1), 2.0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1.8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1.8),
         ]))
         elements.append(specs_table)
-        elements.append(Spacer(1, 3 * mm))
+        elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
         # 3. MARKTVERGLEICH & PREISENTWICKLUNG
         # -------------------------------------------------------------
         elements.append(Paragraph("Marktvergleich &amp; Beobachtung", style_sec_header))
-        elements.append(Spacer(1, 1.5 * mm))
+        elements.append(Spacer(1, 1.2 * mm))
 
         m = car.market_stats or {}
         med_diff = m.get('diff_to_median', 0)
@@ -222,20 +241,20 @@ class PdfExportService:
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
             ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#f1f5f9')),
-            ('TOPPADDING', (0, 0), (-1, -1), 2.0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1.8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1.8),
         ]))
         elements.append(market_table)
-        elements.append(Spacer(1, 3 * mm))
+        elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
         # 4. VORTEILE & NACHTEILE (2-SPALTIG)
         # -------------------------------------------------------------
-        pros_content = [Paragraph("<b>VORTEILE (+)</b>", ParagraphStyle('ProHead', fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.HexColor('#047857')))]
+        pros_content = [Paragraph("<b>VORTEILE (+)</b>", ParagraphStyle('ProHead', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#047857')))]
         for p in (car.pros or ["Gute Grundausstattung"]):
             pros_content.append(Paragraph(f"+ {p}", style_pro))
 
-        cons_content = [Paragraph("<b>NACHTEILE (-)</b>", ParagraphStyle('ConHead', fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.HexColor('#b91c1c')))]
+        cons_content = [Paragraph("<b>NACHTEILE (-)</b>", ParagraphStyle('ConHead', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#b91c1c')))]
         for c in (car.cons or ["Keine gravierenden Nachteile"]):
             cons_content.append(Paragraph(f"- {c}", style_con))
 
@@ -246,13 +265,13 @@ class PdfExportService:
             ('BOX', (0, 0), (0, 0), 0.5, colors.HexColor('#a7f3d0')),
             ('BOX', (1, 0), (1, 0), 0.5, colors.HexColor('#fecaca')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3.5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]))
         elements.append(pros_cons_table)
-        elements.append(Spacer(1, 3 * mm))
+        elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
         # 5. AUSSTATTUNGEN & LINK
@@ -261,7 +280,7 @@ class PdfExportService:
         elements.append(Paragraph("Dokumentierte Ausstattung", style_sec_header))
         elements.append(Spacer(1, 1 * mm))
         elements.append(Paragraph(feat_str, style_body))
-        elements.append(Spacer(1, 2.5 * mm))
+        elements.append(Spacer(1, 2 * mm))
 
         elements.append(Paragraph(
             f"Report generiert am {datetime.now().strftime('%d.%m.%Y um %H:%M Uhr')} &bull; "
@@ -299,16 +318,16 @@ class PdfExportService:
             'ColHead1',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=9.5,
-            leading=12,
+            fontSize=9,
+            leading=11.5,
             textColor=colors.HexColor('#1d4ed8')
         )
         style_col_head2 = ParagraphStyle(
             'ColHead2',
             parent=styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=9.5,
-            leading=12,
+            fontSize=9,
+            leading=11.5,
             textColor=colors.HexColor('#4338ca')
         )
         style_crit = ParagraphStyle(
@@ -365,11 +384,17 @@ class PdfExportService:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]))
         elements.append(head_table)
-        elements.append(Spacer(1, 3 * mm))
+        elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
-        # 2. DETAIL-VERGLEICHSTABELLE (inkl. Verbrauch & Farbe)
+        # 2. DETAIL-VERGLEICHSTABELLE (inkl. Mini-Vorschaubildern)
         # -------------------------------------------------------------
+        img1 = PdfExportService._fetch_image(car1.image_url, width_mm=32, height_mm=21)
+        img2 = PdfExportService._fetch_image(car2.image_url, width_mm=32, height_mm=21)
+
+        c1_head_cell = [img1, Spacer(1, 1 * mm), Paragraph(f"<b>{car1.make} {car1.model}</b>", style_col_head1)] if img1 else [Paragraph(f"<b>{car1.make} {car1.model}</b>", style_col_head1)]
+        c2_head_cell = [img2, Spacer(1, 1 * mm), Paragraph(f"<b>{car2.make} {car2.model}</b>", style_col_head2)] if img2 else [Paragraph(f"<b>{car2.make} {car2.model}</b>", style_col_head2)]
+
         c1_m = car1.market_stats or {}
         c2_m = car2.market_stats or {}
         c1_diff = c1_m.get('diff_to_median', 0)
@@ -383,9 +408,9 @@ class PdfExportService:
 
         rows = [
             [
-                Paragraph("<b>Kriterium</b>", style_crit),
-                Paragraph(f"<b>{car1.make} {car1.model}</b><br/><font size=6.5 color='#64748b'>{car1.title[:45]}...</font>", style_col_head1),
-                Paragraph(f"<b>{car2.make} {car2.model}</b><br/><font size=6.5 color='#64748b'>{car2.title[:45]}...</font>", style_col_head2)
+                Paragraph("<b>Fahrzeug</b>", style_crit),
+                c1_head_cell,
+                c2_head_cell
             ],
             [
                 Paragraph("Deal-Score (0 - 100)", style_crit),
@@ -424,8 +449,8 @@ class PdfExportService:
             ],
             [
                 Paragraph("Farbbewertungs-Score (5%)", style_crit),
-                Paragraph(f"Score: {c1_sub.get('color_preference', 0)} / 100 (Blau/Rot Präferenz)", style_val_win if c1_sub.get('color_preference', 0) >= c2_sub.get('color_preference', 0) else style_val),
-                Paragraph(f"Score: {c2_sub.get('color_preference', 0)} / 100 (Blau/Rot Präferenz)", style_val_win if c2_sub.get('color_preference', 0) >= c1_sub.get('color_preference', 0) else style_val)
+                Paragraph(f"Score: {c1_sub.get('color_preference', 0)} / 100", style_val_win if c1_sub.get('color_preference', 0) >= c2_sub.get('color_preference', 0) else style_val),
+                Paragraph(f"Score: {c2_sub.get('color_preference', 0)} / 100", style_val_win if c2_sub.get('color_preference', 0) >= c1_sub.get('color_preference', 0) else style_val)
             ],
             [
                 Paragraph("Erstzulassung &amp; Alter (8%)", style_crit),
@@ -436,11 +461,6 @@ class PdfExportService:
                 Paragraph("Entfernung (5%)", style_crit),
                 Paragraph(f"{round(car1.distance_km, 1)} km ({car1.city})", style_val_win if car1.distance_km <= car2.distance_km else style_val),
                 Paragraph(f"{round(car2.distance_km, 1)} km ({car2.city})", style_val_win if car2.distance_km <= car1.distance_km else style_val)
-            ],
-            [
-                Paragraph("Plattform &amp; Inserat-ID", style_crit),
-                Paragraph(f"{car1.provider} (ID: {car1.external_id})", style_val),
-                Paragraph(f"{car2.provider} (ID: {car2.external_id})", style_val)
             ]
         ]
 
@@ -450,16 +470,16 @@ class PdfExportService:
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
             ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2.2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.0),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]))
         elements.append(matrix_table)
-        elements.append(Spacer(1, 3 * mm))
+        elements.append(Spacer(1, 2.5 * mm))
 
         # -------------------------------------------------------------
-        # 3. KATEGORIESIEGE (2-SPALTIG)
+        # 3. KATEGORIESIEGE
         # -------------------------------------------------------------
         c1_wins_content = [Paragraph(f"<b>{car1.make} {car1.model} punktet bei:</b>", ParagraphStyle('W1Head', fontName='Helvetica-Bold', fontSize=8, textColor=colors.HexColor('#1d4ed8')))]
         for w in (comparison.get("wins_car1") or ["Keine klaren Kategoriesiege"]):
@@ -476,8 +496,8 @@ class PdfExportService:
             ('BOX', (0, 0), (0, 0), 0.5, colors.HexColor('#bfdbfe')),
             ('BOX', (1, 0), (1, 0), 0.5, colors.HexColor('#c7d2fe')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]))
@@ -489,16 +509,15 @@ class PdfExportService:
         # -------------------------------------------------------------
         winner = comparison.get("overall_winner", car1)
         fazit_text = (
-            f"<b>Kaufberater-Fazit:</b> Unter Einbeziehung aller 8 gewichteten Kriterien (Marktwert, Ausstattung, Verbrauch, "
-            f"Laufleistung, Alter, Leistung, Lackierungspräferenz und Distanz) erzielt der <b>{winner.make} {winner.model}</b> mit einem Gesamt-Deal-Score von "
-            f"<b>{winner.deal_score} / 100</b> das wirtschaftlich und qualitativ überlegene Gesamtpaket gegenüber dem Mitbewerber."
+            f"<b>Kaufberater-Fazit:</b> Unter Einbeziehung aller 8 gewichteten Kriterien erzielt der <b>{winner.make} {winner.model}</b> "
+            f"mit einem Gesamt-Deal-Score von <b>{winner.deal_score} / 100</b> das wirtschaftlich und qualitativ überlegene Gesamtpaket gegenüber dem Mitbewerber."
         )
         fazit_table = Table([[Paragraph(fazit_text, ParagraphStyle('Fazit', fontName='Helvetica', fontSize=7.5, leading=10.5, textColor=colors.HexColor('#0f172a')))]], colWidths=[269 * mm])
         fazit_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
             ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
             ('LEFTPADDING', (0, 0), (-1, -1), 5),
             ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ]))

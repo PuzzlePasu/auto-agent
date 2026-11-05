@@ -19,6 +19,8 @@ class DatabaseRepository:
     def init_db(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Haupttabelle für Fahrzeuge
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS cars (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +43,7 @@ class DatabaseRepository:
                 dealer_name TEXT,
                 features TEXT,
                 image_url TEXT,
+                images TEXT,
                 first_seen TEXT NOT NULL,
                 last_seen TEXT NOT NULL,
                 is_active INTEGER DEFAULT 1,
@@ -57,6 +60,13 @@ class DatabaseRepository:
             )
             """)
 
+            # Automatische Migration falls 'images' in einer bestehenden cars.db noch fehlt
+            cursor.execute("PRAGMA table_info(cars)")
+            columns = [row["name"] for row in cursor.fetchall()]
+            if "images" not in columns:
+                cursor.execute("ALTER TABLE cars ADD COLUMN images TEXT")
+
+            # Preishistorie
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS price_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +77,7 @@ class DatabaseRepository:
             )
             """)
 
+            # Suchlauf-Protokolle
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS search_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,36 +129,44 @@ class DatabaseRepository:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Sicherstellen, dass die Bilderliste als JSON serialisierbar ist
+            images_list = car.images if car.images else ([car.image_url] if car.image_url else [])
+            images_json = json.dumps(images_list)
+
             if car.id is None:
                 cursor.execute("""
                 INSERT INTO cars (
                     provider, external_id, url, make, model, title, price, mileage,
                     first_registration_year, first_registration_month, power_hp,
                     transmission, fuel_type, postal_code, city, distance_km,
-                    dealer_name, features, image_url, first_seen, last_seen,
+                    dealer_name, features, image_url, images, first_seen, last_seen,
                     is_active, consecutive_missing_runs, is_favorite, canonical_id,
                     duplicate_info, deal_score, sub_scores, market_stats, pros, cons
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     car.provider, car.external_id, car.url, car.make, car.model, car.title,
                     car.price, car.mileage, car.first_registration_year, car.first_registration_month,
                     car.power_hp, car.transmission, car.fuel_type, car.postal_code, car.city,
                     car.distance_km, car.dealer_name, json.dumps(car.features), car.image_url,
-                    car.first_seen or now, car.last_seen or now, 1 if car.is_active else 0,
+                    images_json, car.first_seen or now, car.last_seen or now, 1 if car.is_active else 0,
                     car.consecutive_missing_runs, 1 if car.is_favorite else 0, car.canonical_id,
                     json.dumps(car.duplicate_info) if car.duplicate_info else None,
                     car.deal_score, json.dumps(car.sub_scores), json.dumps(car.market_stats),
                     json.dumps(car.pros), json.dumps(car.cons)
                 ))
-                car.id = cursor.lastrowid
-                cursor.execute("INSERT INTO price_history (car_id, price, recorded_at) VALUES (?, ?, ?)",
-                               (car.id, car.price, car.first_seen or now))
+                car_id = cursor.lastrowid
+                car.id = car_id
+                cursor.execute(
+                    "INSERT INTO price_history (car_id, price, recorded_at) VALUES (?, ?, ?)",
+                    (car_id, car.price, car.first_seen or now)
+                )
             else:
                 cursor.execute("""
                 UPDATE cars SET
                     url = ?, title = ?, price = ?, mileage = ?, power_hp = ?,
                     postal_code = ?, city = ?, distance_km = ?, dealer_name = ?,
-                    features = ?, image_url = ?, last_seen = ?, is_active = ?,
+                    features = ?, image_url = ?, images = ?, last_seen = ?, is_active = ?,
                     consecutive_missing_runs = ?, is_favorite = ?, canonical_id = ?,
                     duplicate_info = ?, deal_score = ?, sub_scores = ?, market_stats = ?,
                     pros = ?, cons = ?
@@ -155,12 +174,13 @@ class DatabaseRepository:
                 """, (
                     car.url, car.title, car.price, car.mileage, car.power_hp,
                     car.postal_code, car.city, car.distance_km, car.dealer_name,
-                    json.dumps(car.features), car.image_url, car.last_seen or now,
+                    json.dumps(car.features), car.image_url, images_json, car.last_seen or now,
                     1 if car.is_active else 0, car.consecutive_missing_runs,
                     1 if car.is_favorite else 0, car.canonical_id,
                     json.dumps(car.duplicate_info) if car.duplicate_info else None,
                     car.deal_score, json.dumps(car.sub_scores), json.dumps(car.market_stats),
-                    json.dumps(car.pros), json.dumps(car.cons), car.id
+                    json.dumps(car.pros), json.dumps(car.cons),
+                    car.id
                 ))
             conn.commit()
             return car.id
@@ -169,8 +189,10 @@ class DatabaseRepository:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             recorded_at = timestamp or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("INSERT INTO price_history (car_id, price, recorded_at) VALUES (?, ?, ?)",
-                           (car_id, price, recorded_at))
+            cursor.execute(
+                "INSERT INTO price_history (car_id, price, recorded_at) VALUES (?, ?, ?)",
+                (car_id, price, recorded_at)
+            )
             conn.commit()
 
     def get_price_history(self, car_id: int) -> List[PriceRecord]:
@@ -214,18 +236,50 @@ class DatabaseRepository:
             return [dict(r) for r in cursor.fetchall()]
 
     def _row_to_car(self, row: sqlite3.Row) -> CarListing:
+        row_keys = row.keys()
+        
+        # Sicherer Fallback für images
+        images = []
+        if "images" in row_keys and row["images"]:
+            try:
+                images = json.loads(row["images"])
+            except Exception:
+                images = []
+        if not images and row["image_url"]:
+            images = [row["image_url"]]
+
         return CarListing(
-            id=row["id"], provider=row["provider"], external_id=row["external_id"],
-            url=row["url"], make=row["make"], model=row["model"], title=row["title"],
-            price=row["price"], mileage=row["mileage"], first_registration_year=row["first_registration_year"],
-            first_registration_month=row["first_registration_month"], power_hp=row["power_hp"],
-            transmission=row["transmission"], fuel_type=row["fuel_type"], postal_code=row["postal_code"] or "",
-            city=row["city"] or "", distance_km=row["distance_km"] or 0.0, dealer_name=row["dealer_name"] or "",
-            features=json.loads(row["features"]) if row["features"] else [], image_url=row["image_url"] or "",
-            first_seen=row["first_seen"], last_seen=row["last_seen"], is_active=bool(row["is_active"]),
-            consecutive_missing_runs=row["consecutive_missing_runs"], is_favorite=bool(row["is_favorite"]),
-            canonical_id=row["canonical_id"], duplicate_info=json.loads(row["duplicate_info"]) if row["duplicate_info"] else None,
-            deal_score=row["deal_score"] or 0.0, sub_scores=json.loads(row["sub_scores"]) if row["sub_scores"] else {},
+            id=row["id"],
+            provider=row["provider"],
+            external_id=row["external_id"],
+            url=row["url"],
+            make=row["make"],
+            model=row["model"],
+            title=row["title"],
+            price=row["price"],
+            mileage=row["mileage"],
+            first_registration_year=row["first_registration_year"],
+            first_registration_month=row["first_registration_month"],
+            power_hp=row["power_hp"],
+            transmission=row["transmission"],
+            fuel_type=row["fuel_type"],
+            postal_code=row["postal_code"] or "",
+            city=row["city"] or "",
+            distance_km=row["distance_km"] or 0.0,
+            dealer_name=row["dealer_name"] or "",
+            features=json.loads(row["features"]) if row["features"] else [],
+            image_url=row["image_url"] or "",
+            images=images,
+            first_seen=row["first_seen"],
+            last_seen=row["last_seen"],
+            is_active=bool(row["is_active"]),
+            consecutive_missing_runs=row["consecutive_missing_runs"],
+            is_favorite=bool(row["is_favorite"]),
+            canonical_id=row["canonical_id"],
+            duplicate_info=json.loads(row["duplicate_info"]) if row["duplicate_info"] else None,
+            deal_score=row["deal_score"] or 0.0,
+            sub_scores=json.loads(row["sub_scores"]) if row["sub_scores"] else {},
             market_stats=json.loads(row["market_stats"]) if row["market_stats"] else {},
-            pros=json.loads(row["pros"]) if row["pros"] else [], cons=json.loads(row["cons"]) if row["cons"] else []
+            pros=json.loads(row["pros"]) if row["pros"] else [],
+            cons=json.loads(row["cons"]) if row["cons"] else []
         )
