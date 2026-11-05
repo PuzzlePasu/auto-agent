@@ -1,0 +1,48 @@
+{
+  "search_criteria": {
+    "location": {
+      "postal_code": "97271",
+      "city": "Kleinrinderfeld",
+      "latitude": 49.6983,
+      "longitude": 9.8519,
+      "radius_km": 100
+    },
+    "filters": {
+      "max_price": 27000,
+      "min_year": 2020,
+      "max_mileage": 80000,
+      "min_power_hp": 150,
+      "max_power_hp": 200,
+      "transmission": "Automatik",
+      "size_segment": "Compact / Golf-Klasse"
+    },
+    "models": [
+      {"make": "Volkswagen", "model": "Golf GTI"},
+      {"make": "BMW", "model": "120"},
+      {"make": "Cupra", "model": "Leon"},
+      {"make": "Audi", "model": "A3"},
+      {"make": "Mercedes-Benz", "model": "A-Klasse"},
+      {"make": "Hyundai", "model": "i30 N"}
+    ],
+    "desired_features": [
+      {"id": "acc", "name": "ACC / Adaptiver Tempomat", "keywords": ["acc", "abstandstempomat", "adaptiver tempomat", "distronic", "adaptive cruise control"]},
+      {"id": "led", "name": "LED-Scheinwerfer", "keywords": ["led", "matrix", "voll-led", "led-scheinwerfer", "laserlight", "multibeam"]},
+      {"id": "carplay", "name": "Apple CarPlay", "keywords": ["carplay", "apple carplay", "smartphone integration", "app-connect"]},
+      {"id": "seat_heating", "name": "Sitzheizung", "keywords": ["sitzheizung", "heated seats", "beheizbare vordersitze"]}
+    ]
+  },
+  "scoring_weights": {
+    "market_price": 0.25,
+    "features": 0.20,
+    "mileage": 0.15,
+    "age": 0.10,
+    "power": 0.10,
+    "distance": 0.10,
+    "price_trend": 0.10
+  },
+  "rules": {
+    "inactivity_threshold_runs": 3,
+    "notification_deal_score_threshold": 90,
+    "notification_price_drop_threshold": 500
+  }
+}

@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Breadcrumbs & Aktionen -->
+  <div class="flex items-center justify-between">
+    <a href="/" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition">
+      <i class="fa-solid fa-arrow-left"></i> Zurück zum Dashboard
+    </a>
+    <div class="flex items-center gap-3">
+      <button onclick="toggleFavorite({{ car.id }}, this)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-2">
+        <i class="fa-{% if car.is_favorite %}solid text-rose-500{% else %}regular text-slate-400{% endif %} fa-heart"></i>
+        <span>Favorit</span>
+      </button>
+      <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        <span>Original-Inserat auf {{ car.provider }}</span>
+      </a>
+	  <a href="/car/{{ car.id }}/pdf" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition flex items-center gap-2 border border-slate-700">
+		<i class="fa-solid fa-file-pdf text-rose-500"></i>
+		<span>PDF-Report</span>
+	  </a>
+    </div>
+  </div>
+
+  <!-- Kopfbereich mit Gesamt-Score -->
+  <div class="glass-card rounded-2xl p-6 border border-slate-800 flex flex-col md:flex-row gap-6 items-start justify-between">
+    <div>
+      <div class="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">
+        <span>{{ car.make }}</span>
+        <span>&bull;</span>
+        <span>{{ car.model }}</span>
+        <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-normal">{{ car.provider }}</span>
+      </div>
+      <h1 class="text-2xl font-black text-white leading-tight mb-2">{{ car.title }}</h1>
+      <p class="text-xs text-slate-400">
+        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name }}</span>
+      </p>
+    </div>
+
+    <div class="flex items-center gap-6 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+      <div class="text-right">
+        <div class="text-3xl font-black text-white">{{ "{:,.0f}".format(car.price).replace(",", ".") }} €</div>
+        {% if car.duplicate_info %}
+        <div class="text-xs text-blue-400 font-semibold">{{ car.duplicate_info.message }}</div>
+        {% endif %}
+      </div>
+      <div class="h-12 w-px bg-slate-800"></div>
+      <div class="text-center">
+        <div class="text-[10px] uppercase font-bold text-slate-400">Gesamt-Score</div>
+        <div class="text-3xl font-black {% if car.deal_score >= 88 %}text-emerald-400{% elif car.deal_score >= 75 %}text-blue-400{% else %}text-amber-400{% endif %}">
+          {{ car.deal_score }} <span class="text-sm font-normal text-slate-500">/ 100</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Linke Spalte: Teil-Scores, Vor-/Nachteile, Marktvergleich -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <!-- Teil-Scores Matrix -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-blue-400"></i> Nachvollziehbare Deal-Score Aufschlüsselung
+        </h2>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Marktpreis (25%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('market_price', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('market_price', 0) }}%"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Ausstattung (20%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('features', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-indigo-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('features', 0) }}%"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Laufleistung (15%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('mileage', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('mileage', 0) }}%"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Alter / Baujahr (10%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('age', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-purple-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('age', 0) }}%"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Leistung PS (10%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('power', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-amber-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('power', 0) }}%"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Entfernung (10%)</span>
+            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('distance', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+              <div class="bg-rose-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('distance', 0) }}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vorteile und Nachteile -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="glass-card rounded-2xl p-5 border border-emerald-950/60 bg-emerald-950/10">
+          <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-plus-circle"></i> Vorteile
+          </h3>
+          <ul class="space-y-2 text-xs text-slate-300">
+            {% for pro in car.pros %}
+            <li class="flex items-start gap-2">
+              <span class="text-emerald-400 font-bold">+</span>
+              <span>{{ pro }}</span>
+            </li>
+            {% else %}
+            <li class="text-slate-500 italic">Keine besonderen Pluspunkte ermittelt.</li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="glass-card rounded-2xl p-5 border border-rose-950/60 bg-rose-950/10">
+          <h3 class="text-sm font-bold text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-minus-circle"></i> Nachteile
+          </h3>
+          <ul class="space-y-2 text-xs text-slate-300">
+            {% for con in car.cons %}
+            <li class="flex items-start gap-2">
+              <span class="text-rose-400 font-bold">-</span>
+              <span>{{ con }}</span>
+            </li>
+            {% else %}
+            <li class="text-slate-500 italic">Keine wesentlichen Nachteile festgestellt.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <!-- Marktvergleich Details -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-scale-balanced text-indigo-400"></i> Marktpreis-Vergleich (mobile.de &amp; AutoScout24)
+        </h3>
+        
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 mb-4">
+          <p class="text-sm font-semibold text-slate-200">
+            {{ car.market_stats.summary }}
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+          <div>
+            <span class="text-slate-500 block">Vergleichsfahrzeuge</span>
+            <span class="font-bold text-white text-base">{{ car.market_stats.peer_count }}</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Marktmedian</span>
+            <span class="font-bold text-white text-base">{{ "{:,.0f}".format(car.market_stats.median_price).replace(",", ".") }} €</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Durchschnittspreis</span>
+            <span class="font-bold text-white text-base">{{ "{:,.0f}".format(car.market_stats.mean_price).replace(",", ".") }} €</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Differenz zum Median</span>
+            <span class="font-bold text-base {% if car.market_stats.diff_to_median < 0 %}text-emerald-400{% else %}text-amber-400{% endif %}">
+              {{ "{:,.0f}".format(car.market_stats.diff_to_median).replace(",", ".") }} € ({{ car.market_stats.diff_percent }}%)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ausstattungsliste -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-list-check text-blue-400"></i> Erkannte Ausstattungsmerkmale
+        </h3>
+        <div class="flex flex-wrap gap-2">
+          {% for f in car.features %}
+          <span class="px-3 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs font-medium text-slate-200">
+            <i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> {{ f }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Rechte Spalte: Standzeit & Preishistorie -->
+    <div class="space-y-6">
+
+      <div class="glass-card rounded-2xl p-6 border border-slate-800">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-amber-400"></i> Standzeit &amp; Beobachtung
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between py-2 border-b border-slate-800">
+            <span class="text-slate-400">Erstmals entdeckt:</span>
+            <span class="font-semibold text-slate-200">{{ car.first_seen }}</span>
+          </div>
+          <div class="flex justify-between py-2 border-b border-slate-800">
+            <span class="text-slate-400">Zuletzt aktualisiert:</span>
+            <span class="font-semibold text-slate-200">{{ car.last_seen }}</span>
+          </div>
+          <div class="flex justify-between py-2 border-b border-slate-800">
+            <span class="text-slate-400">Standzeit / Beobachtungsdauer:</span>
+            <span class="font-bold text-amber-400">Seit {{ days_online }} Tagen online</span>
+          </div>
+          <div class="flex justify-between py-2">
+            <span class="text-slate-400">Status:</span>
+            <span class="font-semibold {% if car.is_active %}text-emerald-400{% else %}text-rose-400{% endif %}">
+              {% if car.is_active %}Aktiv am Markt{% else %}Inaktiv / Verschwunden{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-6 border border-slate-800">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-tag text-emerald-400"></i> Preishistorie
+        </h3>
+
+        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs mb-4">
+          <span class="font-semibold text-slate-200">{{ price_metrics.summary }}</span>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          {% for p in price_history %}
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
+            <span class="text-slate-400">{{ p.recorded_at[:10] }}</span>
+            <span class="font-bold text-white">{{ "{:,.0f}".format(p.price).replace(",", ".") }} €</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

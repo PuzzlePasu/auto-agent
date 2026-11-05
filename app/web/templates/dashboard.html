@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- KPI Kacheln -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs uppercase tracking-wider font-semibold">Aktive Angebote</span>
+        <i class="fa-solid fa-car text-blue-400"></i>
+      </div>
+      <div class="text-3xl font-bold text-white">{{ total_active_count }}</div>
+      <p class="text-xs text-slate-400 mt-1">Im Suchprofil &amp; Radius</p>
+    </div>
+
+    <div class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs uppercase tracking-wider font-semibold">Höchster Deal-Score</span>
+        <i class="fa-solid fa-trophy text-emerald-400"></i>
+      </div>
+      <div class="text-3xl font-bold text-emerald-400">
+        {% if top_deals %}{{ top_deals[0].deal_score }}{% else %}--{% endif %} <span class="text-base text-slate-400 font-normal">/ 100</span>
+      </div>
+      <p class="text-xs text-slate-400 mt-1">
+        {% if top_deals %}{{ top_deals[0].make }} {{ top_deals[0].model }}{% else %}Keine Angebote{% endif %}
+      </p>
+    </div>
+
+    <div class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs uppercase tracking-wider font-semibold">Standort-Fokus</span>
+        <i class="fa-solid fa-location-dot text-rose-400"></i>
+      </div>
+      <div class="text-2xl font-bold text-white">97271</div>
+      <p class="text-xs text-slate-400 mt-1">Kleinrinderfeld (100 km Radius)</p>
+    </div>
+
+    <div class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex items-center justify-between text-slate-400 mb-2">
+        <span class="text-xs uppercase tracking-wider font-semibold">Markt-Quellen</span>
+        <i class="fa-solid fa-network-wired text-purple-400"></i>
+      </div>
+      <div class="text-base font-semibold text-white flex items-center gap-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400"></span> mobile.de &amp; AS24
+      </div>
+      <p class="text-xs text-slate-400 mt-1">Dublettenfilterung aktiv</p>
+    </div>
+  </div>
+
+  <!-- Top-Deals Schnellansicht -->
+  {% if top_deals and current_tab == 'active' %}
+  <div>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold text-white flex items-center gap-2">
+        <i class="fa-solid fa-bolt text-amber-400"></i> Aktuelle Top-Deals
+      </h2>
+      <span class="text-xs text-slate-400">Höchster mathematischer Gesamtvorteil</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {% for deal in top_deals %}
+      <div class="glass-card rounded-2xl overflow-hidden border border-slate-800 hover:border-blue-500/50 transition-all flex flex-col justify-between group">
+        <div>
+          <div class="relative h-44 overflow-hidden bg-slate-800">
+            <img src="{{ deal.image_url }}" alt="{{ deal.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            <div class="absolute top-3 left-3 bg-slate-900/90 backdrop-blur px-2.5 py-1 rounded-md text-xs font-semibold text-slate-200 border border-slate-700">
+              {{ deal.provider }}
+            </div>
+            <div class="absolute top-3 right-3 bg-emerald-500/95 text-slate-950 font-black px-3 py-1 rounded-lg text-sm shadow-lg">
+              Score: {{ deal.deal_score }}
+            </div>
+          </div>
+
+          <div class="p-5">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>{{ deal.make }} &bull; {{ deal.first_registration_year }}</span>
+              <span><i class="fa-solid fa-location-arrow text-slate-500 mr-1"></i>{{ deal.distance_km|round(1) }} km</span>
+            </div>
+            <h3 class="font-bold text-white text-base leading-snug line-clamp-1 mb-2">
+              <a href="/car/{{ deal.id }}" class="hover:text-blue-400 transition">{{ deal.title }}</a>
+            </h3>
+
+            <div class="flex items-baseline gap-2 mb-3">
+              <span class="text-2xl font-black text-white">{{ "{:,.0f}".format(deal.price).replace(",", ".") }} €</span>
+              {% if deal.market_stats and deal.market_stats.diff_to_median < 0 %}
+              <span class="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                -{{ "{:,.0f}".format(deal.market_stats.diff_to_median|abs).replace(",", ".") }} € vs. Markt
+              </span>
+              {% endif %}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs text-slate-300 py-2 border-t border-slate-800/80">
+              <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-road text-slate-500"></i>
+                <span>{{ "{:,.0f}".format(deal.mileage).replace(",", ".") }} km</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <i class="fa-solid fa-horse-head text-slate-500"></i>
+                <span>{{ deal.power_hp }} PS (Automatik)</span>
+              </div>
+            </div>
+
+            {% if deal.duplicate_info %}
+            <div class="mt-2 text-xs bg-blue-950/40 border border-blue-800/50 text-blue-300 p-2 rounded-lg">
+              <i class="fa-solid fa-copy mr-1"></i> {{ deal.duplicate_info.message }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="px-5 pb-5 pt-0">
+          <a href="/car/{{ deal.id }}" class="block w-full text-center py-2.5 bg-slate-800 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition">
+            Analyse &amp; Details ansehen
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Filter & Tabs -->
+  <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
+      <div class="flex items-center space-x-2">
+        <a href="/?tab=active" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold {% if current_tab == 'active' %}bg-blue-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %} transition">
+          Alle Aktiven ({{ total_active_count }})
+        </a>
+        <a href="/?tab=favorites" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold {% if current_tab == 'favorites' %}bg-rose-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %} transition">
+          Favoriten
+        </a>
+        <a href="/?tab=price_drops" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold {% if current_tab == 'price_drops' %}bg-amber-600 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %} transition">
+          Preisreduziert
+        </a>
+        <a href="/?tab=inactive" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold {% if current_tab == 'inactive' %}bg-slate-700 text-white{% else %}text-slate-400 hover:text-white hover:bg-slate-800{% endif %} transition">
+          Verschwunden / Inaktiv
+        </a>
+      </div>
+
+      <form method="GET" class="flex items-center gap-2">
+        <input type="hidden" name="tab" value="{{ current_tab }}">
+        <label for="sort_by" class="text-xs text-slate-400 font-medium">Sortieren:</label>
+        <select name="sort_by" id="sort_by" onchange="this.form.submit()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500">
+          <option value="best_deal" {% if sort_by == 'best_deal' %}selected{% endif %}>Bester Deal-Score</option>
+          <option value="lowest_price" {% if sort_by == 'lowest_price' %}selected{% endif %}>Niedrigster Preis</option>
+          <option value="lowest_mileage" {% if sort_by == 'lowest_mileage' %}selected{% endif %}>Geringste Kilometer</option>
+          <option value="highest_power" {% if sort_by == 'highest_power' %}selected{% endif %}>Höchste Leistung</option>
+          <option value="lowest_distance" {% if sort_by == 'lowest_distance' %}selected{% endif %}>Kürzeste Entfernung</option>
+          <option value="newest_listing" {% if sort_by == 'newest_listing' %}selected{% endif %}>Neueste Angebote</option>
+        </select>
+      </form>
+    </div>
+
+    <!-- Filter Formular -->
+    <form method="GET" class="grid grid-cols-2 md:grid-cols-6 gap-4 text-xs">
+      <input type="hidden" name="tab" value="{{ current_tab }}">
+      <input type="hidden" name="sort_by" value="{{ sort_by }}">
+
+      <div>
+        <label class="block text-slate-400 mb-1">Hersteller</label>
+        <select name="make" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2">
+          <option value="">Alle Hersteller</option>
+          <option value="BMW" {% if filters.make == 'BMW' %}selected{% endif %}>BMW</option>
+          <option value="Volkswagen" {% if filters.make == 'Volkswagen' %}selected{% endif %}>Volkswagen</option>
+          <option value="Cupra" {% if filters.make == 'Cupra' %}selected{% endif %}>Cupra</option>
+          <option value="Audi" {% if filters.make == 'Audi' %}selected{% endif %}>Audi</option>
+          <option value="Mercedes-Benz" {% if filters.make == 'Mercedes-Benz' %}selected{% endif %}>Mercedes-Benz</option>
+          <option value="Hyundai" {% if filters.make == 'Hyundai' %}selected{% endif %}>Hyundai</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-slate-400 mb-1">Max. Preis (€)</label>
+        <input type="number" name="max_price" value="{{ filters.max_price }}" placeholder="z.B. 27000" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2">
+      </div>
+
+      <div>
+        <label class="block text-slate-400 mb-1">Max. KM</label>
+        <input type="number" name="max_mileage" value="{{ filters.max_mileage }}" placeholder="z.B. 80000" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2">
+      </div>
+
+      <div>
+        <label class="block text-slate-400 mb-1">Mindest-Score</label>
+        <input type="number" name="min_score" value="{{ filters.min_score }}" placeholder="z.B. 80" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2">
+      </div>
+
+      <div>
+        <label class="block text-slate-400 mb-1">Börse / Quelle</label>
+        <select name="provider" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2">
+          <option value="">Alle Quellen</option>
+          <option value="mobile.de" {% if filters.provider == 'mobile.de' %}selected{% endif %}>mobile.de</option>
+          <option value="autoscout24" {% if filters.provider == 'autoscout24' %}selected{% endif %}>AutoScout24</option>
+        </select>
+      </div>
+
+      <div class="flex items-end gap-2">
+        <button type="submit" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2 px-3 rounded-lg transition">
+          Filtern
+        </button>
+        <a href="/" class="bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold py-2 px-3 rounded-lg transition" title="Filter zurücksetzen">
+          <i class="fa-solid fa-xmark"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Fahrzeugliste -->
+  <div class="space-y-4">
+    {% for car in cars %}
+    <div class="glass-card rounded-2xl p-5 border border-slate-800 hover:border-slate-700 transition flex flex-col md:flex-row gap-5 items-stretch relative">
+      <div class="w-full md:w-56 h-40 rounded-xl overflow-hidden bg-slate-800 flex-shrink-0 relative">
+        <img src="{{ car.image_url }}" alt="{{ car.title }}" class="w-full h-full object-cover">
+        <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-900/90 text-slate-300 border border-slate-700">
+          {{ car.provider }}
+        </span>
+      </div>
+
+      <div class="flex-grow flex flex-col justify-between">
+        <div>
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-semibold text-blue-400">{{ car.make }} &bull; {{ car.model }}</span>
+                <span class="text-slate-600">&bull;</span>
+                <span class="text-xs text-slate-400">EZ {{ car.first_registration_year }}</span>
+                <span class="text-slate-600">&bull;</span>
+                <span class="text-xs text-slate-400">{{ car.city }} ({{ car.distance_km|round(1) }} km)</span>
+              </div>
+              <h3 class="text-base font-bold text-white hover:text-blue-400 transition">
+                <a href="/car/{{ car.id }}">{{ car.title }}</a>
+              </h3>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="toggleFavorite({{ car.id }}, this)" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition" title="Als Favorit merken">
+                <i class="fa-{% if car.is_favorite %}solid text-rose-500{% else %}regular text-slate-400{% endif %} fa-heart"></i>
+              </button>
+              <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg bg-slate-800/80 hover:bg-blue-600 text-slate-300 hover:text-white transition" title="Inserat auf {{ car.provider }} öffnen">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              </a>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-1.5 mt-3">
+            {% for feat in car.features[:4] %}
+            <span class="px-2 py-0.5 bg-slate-800/60 border border-slate-700/60 rounded text-[11px] text-slate-300">
+              {{ feat }}
+            </span>
+            {% endfor %}
+            {% if car.features|length > 4 %}
+            <span class="px-1.5 py-0.5 text-[11px] text-slate-500">+{{ car.features|length - 4 }} weitere</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-300 pt-4 mt-3 border-t border-slate-800/80">
+          <div>
+            <span class="text-slate-500 block text-[10px] uppercase">Laufleistung</span>
+            <span class="font-semibold">{{ "{:,.0f}".format(car.mileage).replace(",", ".") }} km</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block text-[10px] uppercase">Leistung / Getriebe</span>
+            <span class="font-semibold">{{ car.power_hp }} PS &bull; {{ car.transmission }}</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block text-[10px] uppercase">Marktpreis-Vergleich</span>
+            {% if car.market_stats and car.market_stats.diff_to_median < 0 %}
+            <span class="text-emerald-400 font-semibold">{{ "{:,.0f}".format(car.market_stats.diff_to_median|abs).replace(",", ".") }} € günstiger</span>
+            {% elif car.market_stats and car.market_stats.diff_to_median > 0 %}
+            <span class="text-amber-400 font-semibold">+{{ "{:,.0f}".format(car.market_stats.diff_to_median).replace(",", ".") }} € vs. Median</span>
+            {% else %}
+            <span class="text-slate-400">Auf Marktniveau</span>
+            {% endif %}
+          </div>
+          <div>
+            <span class="text-slate-500 block text-[10px] uppercase">Beobachtet seit</span>
+            <span class="text-slate-300">{{ car.first_seen[:10] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="w-full md:w-48 flex-shrink-0 flex md:flex-col justify-between items-end border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-5">
+        <div class="text-right">
+          <div class="text-2xl font-black text-white">
+            {{ "{:,.0f}".format(car.price).replace(",", ".") }} €
+          </div>
+          {% if car.duplicate_info %}
+          <div class="text-[11px] text-blue-400 font-medium mt-0.5">
+            {{ car.duplicate_info.other_provider }}: {{ "{:,.0f}".format(car.duplicate_info.other_price).replace(",", ".") }} €
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="text-right mt-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Deal-Score</div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl {% if car.deal_score >= 88 %}bg-emerald-500/20 text-emerald-400 border border-emerald-500/30{% elif car.deal_score >= 75 %}bg-blue-500/20 text-blue-400 border border-blue-500/30{% else %}bg-amber-500/20 text-amber-400 border border-amber-500/30{% endif %}">
+            <span class="text-xl font-black score-badge">{{ car.deal_score }}</span>
+            <span class="text-[10px] text-slate-400 font-medium">/ 100</span>
+          </div>
+        </div>
+
+        <div class="w-full mt-4 flex gap-2">
+          <a href="/car/{{ car.id }}" class="flex-1 text-center py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold transition">
+            Details
+          </a>
+          <a href="/compare?id1={{ car.id }}" class="p-2 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white rounded-lg text-xs transition" title="Mit anderem Auto vergleichen">
+            <i class="fa-solid fa-code-compare"></i>
+          </a>
+		  <a href="/car/{{ car.id }}/pdf" class="p-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white rounded-lg text-xs transition" title="Als PDF exportieren">
+			<i class="fa-solid fa-file-pdf"></i>
+		  </a>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-center py-16 glass-card rounded-2xl border border-slate-800">
+      <i class="fa-solid fa-car-tunnel text-4xl text-slate-600 mb-3"></i>
+      <h3 class="text-base font-semibold text-slate-300">Keine Fahrzeuge gefunden</h3>
+      <p class="text-xs text-slate-500 mt-1">Passe die Filter an oder starte einen neuen Suchlauf über "Jetzt suchen".</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Suchprotokoll-Tabelle -->
+  <div class="glass-card rounded-2xl p-6 border border-slate-800 mt-8">
+    <h3 class="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+      <i class="fa-solid fa-terminal text-slate-500"></i> Letzte Suchprotokolle
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-400">
+        <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800">
+          <tr>
+            <th class="py-2">Zeitstempel</th>
+            <th class="py-2">Provider</th>
+            <th class="py-2">Gefunden</th>
+            <th class="py-2">Neu</th>
+            <th class="py-2">Preisänderungen</th>
+            <th class="py-2">Dubletten</th>
+            <th class="py-2">Inaktiv</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60">
+          {% for log in recent_logs %}
+          <tr>
+            <td class="py-2 text-slate-300">{{ log.start_time }}</td>
+            <td class="py-2">{{ log.provider }}</td>
+            <td class="py-2 font-semibold text-white">{{ log.total_found }}</td>
+            <td class="py-2 text-emerald-400">+{{ log.new_found }}</td>
+            <td class="py-2 text-amber-400">{{ log.price_changes }}</td>
+            <td class="py-2 text-blue-400">{{ log.duplicates_detected }}</td>
+            <td class="py-2 text-rose-400">{{ log.deactivated_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

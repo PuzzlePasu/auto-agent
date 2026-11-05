@@ -1,0 +1,26 @@
+# Umgebungsdateien mit Secrets
+.env
+*.env
+!.env.example
+
+# Lokale Datenbank & Persistent Data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtuelle Umgebungen & IDEs
+venv/
+.venv/
+.idea/
+.vscode/
+
+# Build & OS Artefakte
+Thumbs.db
+.DS_Store
