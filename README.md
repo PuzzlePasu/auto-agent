@@ -2,7 +2,7 @@
 
 > Dein persönlicher, automatisierter Gebrauchtwagen-Kaufberater und Deal-Scout.
 
-**Auto-Agent** durchsucht kontinuierlich Fahrzeugbörsen (**mobile.de** und **AutoScout24**), erkennt Duplikate, protokolliert Preisänderungen, berechnet transparente **Deal-Scores** anhand eines mathematischen Modells und stellt Inserate im Umkreis von **97271 Kleinrinderfeld** (100 km Radius) übersichtlich dar.
+**Auto-Agent** durchsucht kontinuierlich Fahrzeugbörsen (**mobile.de** und **AutoScout24**), erkennt Duplikate, protokolliert Preisänderungen, berechnet transparente **Deal-Scores** anhand eines mathematischen Modells und stellt Inserate im Umkreis übersichtlich dar.
 
 ---
 
