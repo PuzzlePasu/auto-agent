@@ -3,92 +3,141 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto-Agent | Dein persönlicher Auto-Kaufberater</title>
+  <title>{% block title %}Auto-Agent &bull; Fahrzeug-Tracking &amp; Vergleich{% endblock %}</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           colors: {
-            brand: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+            slate: {
+              850: '#151f32',
+              950: '#070b14',
+            }
           }
         }
       }
     }
   </script>
+  
   <style>
-    body { background-color: #0b0f19; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
-    .glass-card { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .glass-card:hover { border-color: rgba(59, 130, 246, 0.35); }
-    .score-badge { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+    body {
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+    }
+    .glass-nav {
+      background: rgba(11, 15, 25, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
   </style>
+  {% block extra_head %}{% endblock %}
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
 
-  <!-- Header & Navigation -->
-  <header class="sticky top-0 z-50 glass-card border-b border-slate-800 bg-slate-900/90 px-6 py-4">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/" class="flex items-center space-x-3 group">
-          <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform">
-            <i class="fa-solid fa-car-side text-lg"></i>
-          </div>
-          <div>
-            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              Auto-Agent
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">97271 Kleinrinderfeld</span>
-            </h1>
-            <p class="text-xs text-slate-400">Marktbeobachter &amp; Deal-Scout (100 km Radius)</p>
-          </div>
-        </a>
-      </div>
+  <!-- Header / Navigation -->
+  <header class="sticky top-0 z-50 glass-nav">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Subline -->
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-105 transition">
+          <i class="fa-solid fa-car-side text-sm"></i>
+        </div>
+        <div>
+          <span class="text-base font-black tracking-tight text-white block leading-none">Auto-Agent</span>
+          <span class="text-[10px] text-slate-400 font-medium">97271 Kleinrinderfeld &bull; 100 km Radius</span>
+        </div>
+      </a>
 
-      <div class="flex items-center space-x-4">
-        <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-slate-200 hover:text-white hover:bg-slate-800/60 transition">
-          <i class="fa-solid fa-gauge mr-1.5 text-blue-400"></i> Dashboard
-        </a>
-        <a href="/compare" class="px-3 py-2 rounded-lg text-sm font-medium text-slate-200 hover:text-white hover:bg-slate-800/60 transition">
-          <i class="fa-solid fa-code-compare mr-1.5 text-indigo-400"></i> Direktvergleich
-        </a>
-        <a href="/?tab=favorites" class="px-3 py-2 rounded-lg text-sm font-medium text-slate-200 hover:text-white hover:bg-slate-800/60 transition">
-          <i class="fa-solid fa-heart mr-1.5 text-rose-500"></i> Favoriten
-        </a>
+      <!-- Hauptnavigation & Aktions-Buttons -->
+      <div class="flex items-center gap-2 sm:gap-4">
+        
+        <nav class="flex items-center gap-1.5 sm:gap-2">
+          <!-- Dashboard -->
+          <a href="/" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-table-cells-large text-slate-400"></i>
+            <span>Dashboard</span>
+          </a>
 
-        <!-- Manueller Suchlauf -->
-        <form action="/api/search-now" method="POST" class="inline">
-          <button type="submit" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-sm font-semibold shadow-lg shadow-blue-600/30 transition transform active:scale-95">
+          <!-- Direktvergleich -->
+          <a href="/compare" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-code-compare text-slate-400"></i>
+            <span>Vergleich</span>
+          </a>
+
+          <!-- Kriterien / Einstellungen -->
+          <a href="/settings" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5 border border-slate-800">
+            <i class="fa-solid fa-gear text-slate-400"></i>
+            <span>Kriterien</span>
+          </a>
+        </nav>
+
+        <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+        <!-- Manueller Suchlauf Button -->
+        <form action="/api/search-now" method="POST" class="m-0">
+          <button type="submit" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/30 transition flex items-center gap-1.5">
             <i class="fa-solid fa-rotate"></i>
-            <span>Jetzt suchen</span>
+            <span class="hidden sm:inline">Jetzt suchen</span>
           </button>
         </form>
+
       </div>
     </div>
   </header>
 
   <!-- Hauptinhalt -->
-  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="border-t border-slate-800 bg-slate-950/80 px-6 py-6 text-center text-xs text-slate-500">
-    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-      <p>Auto-Agent &bull; Überwacht mobile.de &amp; AutoScout24 im 100 km Umkreis von 97271 Kleinrinderfeld</p>
-      <p class="flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        Hintergrund-Crawler aktiv
-      </p>
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950/40 py-5 text-center text-xs text-slate-500 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>Auto-Agent aktiv &bull; FastAPI + SQLite auf Unraid</span>
+      </div>
+      <div>
+        <span>Fahrzeug-Tracking: mobile.de &bull; AutoScout24</span>
+      </div>
     </div>
   </footer>
 
+  <!-- Globale JavaScript-Hilfsfunktionen -->
   <script>
-    async function toggleFavorite(carId, btn) {
+    async function toggleFavorite(carId, btnElement) {
       try {
-        const res = await fetch(`/api/favorite/${carId}`, { method: 'POST' });
-        const data = await res.json();
+        const resp = await fetch(`/api/favorite/${carId}`, { method: 'POST' });
+        const data = await resp.json();
         if (data.success) {
-          const icon = btn.querySelector('i');
+          const icon = btnElement.querySelector('i');
           if (data.is_favorite) {
             icon.classList.remove('fa-regular', 'text-slate-400');
             icon.classList.add('fa-solid', 'text-rose-500');
@@ -97,10 +146,11 @@
             icon.classList.add('fa-regular', 'text-slate-400');
           }
         }
-      } catch (err) {
-        console.error('Fehler beim Speichern des Favoriten:', err);
+      } catch (e) {
+        console.error('Fehler beim Umschalten des Favoriten-Status:', e);
       }
     }
   </script>
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

@@ -1,6 +1,9 @@
+import json
+import logging
 from pathlib import Path
 from datetime import datetime
-from fastapi import APIRouter, Request, Query
+from typing import List
+from fastapi import APIRouter, Request, Query, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -8,16 +11,22 @@ from app.database.repository import DatabaseRepository
 from app.services.search import SearchService
 from app.services.pdf_export import PdfExportService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
-# Absoluter Pfad zu den Templates – verhindert Pfad-Fehler im Docker-Container
+# Pfade relativ zur Datei festlegen (verhindert Pfadfehler im Docker-Container)
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+CONFIG_PATH = BASE_DIR.parent.parent / "config.json"
 
 repo = DatabaseRepository()
 search_service = SearchService(repo)
 
 
+# -------------------------------------------------------------
+# 1. DASHBOARD
+# -------------------------------------------------------------
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
@@ -97,6 +106,9 @@ async def dashboard(
     )
 
 
+# -------------------------------------------------------------
+# 2. DETAILANSICHT
+# -------------------------------------------------------------
 @router.get("/car/{car_id}", response_class=HTMLResponse)
 async def car_details(request: Request, car_id: int):
     car = repo.get_car_by_id(car_id)
@@ -120,11 +132,13 @@ async def car_details(request: Request, car_id: int):
     )
 
 
+# -------------------------------------------------------------
+# 3. DIREKTVERGLEICH
+# -------------------------------------------------------------
 @router.get("/compare", response_class=HTMLResponse)
 async def compare_cars(request: Request, id1: int = Query(None), id2: int = Query(None)):
     all_cars = repo.get_all_cars(only_active=True, canonical_only=True)
     
-    # Intelligenter Fallback: Wähle die ersten beiden Autos, falls keine ID übergeben wurde
     car1 = repo.get_car_by_id(id1) if id1 else (all_cars[0] if len(all_cars) > 0 else None)
     car2 = repo.get_car_by_id(id2) if id2 else (all_cars[1] if len(all_cars) > 1 else (all_cars[0] if len(all_cars) > 0 else None))
 
@@ -174,6 +188,142 @@ async def compare_cars(request: Request, id1: int = Query(None), id2: int = Quer
     )
 
 
+# -------------------------------------------------------------
+# 4. EINSTELLUNGEN & CONFIG-MANAGEMENT
+# -------------------------------------------------------------
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_view(request: Request):
+    config_dict = {}
+    config_raw = "{}"
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                config_dict = json.load(f)
+                config_raw = json.dumps(config_dict, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Fehler beim Laden von config.json: {e}")
+            config_raw = f"// Fehler beim Laden der Datei: {e}"
+
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "config": config_dict,
+            "config_raw": config_raw,
+            "saved": request.query_params.get("saved") == "true",
+            "error": request.query_params.get("error")
+        }
+    )
+
+
+@router.post("/settings/save")
+async def settings_save(
+    request: Request,
+    edit_mode: str = Form("fields"),
+    # Formularfelder für Wohnort / Umkreis / Budget
+    postal_code: str = Form("97271"),
+    city: str = Form("Kleinrinderfeld"),
+    radius_km: int = Form(100),
+    max_price: float = Form(27000),
+    max_mileage: int = Form(80000),
+    min_year: int = Form(2020),
+    min_power_hp: int = Form(150),
+    max_power_hp: int = Form(200),
+    exclude_hybrids: bool = Form(False),
+    exclude_white: bool = Form(False),
+    weight_market: float = Form(22.0),
+    weight_features: float = Form(23.0),
+    weight_consumption: float = Form(10.0),
+    weight_color: float = Form(5.0),
+    weight_mileage: float = Form(15.0),
+    model_make: List[str] = Form(default=[]),
+    model_name: List[str] = Form(default=[]),
+    features_json: str = Form("[]"),
+    run_search_after: bool = Form(False),
+    raw_json: str = Form("")
+):
+    try:
+        if edit_mode == "raw":
+            # 1. Direkte JSON-Bearbeitung validieren und übernehmen
+            parsed_data = json.loads(raw_json)
+        else:
+            # 2. Formular-Felder mit bestehender config mergen
+            parsed_data = {}
+            if CONFIG_PATH.exists():
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    parsed_data = json.load(f)
+
+            crit = parsed_data.setdefault("search_criteria", {})
+            loc = crit.setdefault("location", {})
+            flt = crit.setdefault("filters", {})
+            weights = parsed_data.setdefault("scoring_weights", {})
+            scoring_rules = parsed_data.setdefault("scoring_rules", {})
+
+            # Standort & Umkreis
+            loc["postal_code"] = postal_code.strip()
+            loc["city"] = city.strip()
+            loc["radius_km"] = radius_km
+
+            # Filter
+            flt["max_price"] = max_price
+            flt["max_mileage"] = max_mileage
+            flt["min_year"] = min_year
+            flt["min_power_hp"] = min_power_hp
+            flt["max_power_hp"] = max_power_hp
+            flt["exclude_hybrids"] = exclude_hybrids
+            
+            if exclude_white:
+                flt["exclude_colors"] = ["weiß", "weiss", "white", "oryxweiß", "alpinweiß", "pure white"]
+            else:
+                flt["exclude_colors"] = []
+
+            # Dynamische Modelle
+            updated_models = []
+            for make_val, model_val in zip(model_make, model_name):
+                make_clean = make_val.strip()
+                model_clean = model_val.strip()
+                if make_clean and model_clean:
+                    updated_models.append({"make": make_clean, "model": model_clean})
+            if updated_models:
+                crit["models"] = updated_models
+
+            # Ausstattungs-Tags
+            try:
+                parsed_features = json.loads(features_json)
+                if isinstance(parsed_features, list):
+                    scoring_rules["desired_features"] = [f.strip() for f in parsed_features if f.strip()]
+            except Exception:
+                pass
+
+            # Scoring-Gewichte
+            weights["market_price"] = weight_market / 100.0
+            weights["features"] = weight_features / 100.0
+            weights["consumption"] = weight_consumption / 100.0
+            weights["color_preference"] = weight_color / 100.0
+            weights["mileage"] = weight_mileage / 100.0
+
+        # In config.json speichern
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(parsed_data, f, indent=2, ensure_ascii=False)
+
+        # Optional: Sofortigen Suchlauf anstoßen
+        if run_search_after:
+            search_service.run_search_pipeline()
+            return RedirectResponse(url="/?saved=true", status_code=303)
+
+        return RedirectResponse(url="/settings?saved=true", status_code=303)
+
+    except json.JSONDecodeError as err:
+        logger.error(f"JSONDecodeError beim Speichern der Konfiguration: {err}")
+        return RedirectResponse(url=f"/settings?error=Ungueltiges+JSON:+{err.msg}", status_code=303)
+    except Exception as e:
+        logger.error(f"Fehler beim Speichern der Konfiguration: {e}", exc_info=True)
+        return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
+
+
+# -------------------------------------------------------------
+# 5. PDF-EXPORTE
+# -------------------------------------------------------------
 @router.get("/car/{car_id}/pdf")
 async def download_car_pdf(car_id: int):
     car = repo.get_car_by_id(car_id)
@@ -187,7 +337,6 @@ async def download_car_pdf(car_id: int):
 
     pdf_bytes = PdfExportService.generate_car_report(car, price_metrics, days_online)
 
-    # Dateiname mit gerundetem Deal-Score (z.B. auto-agent-score94-bmw-128ti-1.pdf)
     score_tag = f"score{int(round(car.deal_score))}"
     safe_make_model = f"{car.make}-{car.model}".replace(" ", "_").lower()
     filename = f"auto-agent-{score_tag}-{safe_make_model}-{car.id}.pdf"
@@ -240,7 +389,6 @@ async def download_compare_pdf(id1: int = Query(...), id2: int = Query(...)):
 
     pdf_bytes = PdfExportService.generate_comparison_report(car1, car2, comparison_results)
 
-    # Dateiname mit beiden Scores (z.B. vergleich-score94-bmw-128ti-vs-score88-volkswagen-golf.pdf)
     c1_tag = f"score{int(round(car1.deal_score))}-{car1.make}-{car1.model}".replace(" ", "_").lower()
     c2_tag = f"score{int(round(car2.deal_score))}-{car2.make}-{car2.model}".replace(" ", "_").lower()
     filename = f"vergleich-{c1_tag}-vs-{c2_tag}.pdf"
@@ -252,13 +400,21 @@ async def download_compare_pdf(id1: int = Query(...), id2: int = Query(...)):
     )
 
 
+# -------------------------------------------------------------
+# 6. API-AKTIONEN
+# -------------------------------------------------------------
 @router.post("/api/favorite/{car_id}")
 async def toggle_favorite(car_id: int):
     new_status = repo.toggle_favorite(car_id)
     return {"success": True, "is_favorite": new_status}
 
-
 @router.post("/api/search-now")
 async def trigger_search():
     search_service.run_search_pipeline()
     return RedirectResponse(url="/", status_code=303)
+
+@router.post("/api/rescore")
+async def trigger_rescore():
+    count = search_service.rescore_all_listings()
+    logger.info(f"Manuelles Re-Scoring über Webinterface abgeschlossen ({count} Autos aktualisiert).")
+    return RedirectResponse(url="/?rescored=true", status_code=303)

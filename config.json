@@ -3,272 +3,147 @@
     "location": {
       "postal_code": "97271",
       "city": "Kleinrinderfeld",
-      "latitude": 49.6983,
-      "longitude": 9.8519,
-      "radius_km": 100
+      "radius_km": 100,
+      "latitude": 49.6989,
+      "longitude": 9.8486
     },
     "filters": {
-      "fuel_type": "Benzin",
-      "exclude_hybrids": true,
-      "hybrid_negative_keywords": [
-        "hybrid",
-        "mhev",
-        "phev",
-        "plug-in",
-        "plugin",
-        "ehybrid",
-        "e-hybrid",
-        "gte",
-        "etsi",
-        "mildhybrid"
-      ],
       "max_price": 27000,
       "min_year": 2020,
       "max_mileage": 80000,
       "min_power_hp": 150,
       "max_power_hp": 200,
       "transmission": "Automatik",
-      "size_segment": "Compact / Golf-Klasse",
-      "exclude_private_sellers": true,
+      "fuel_type": "Benzin",
+      "dealer_only": true,
+      "exclude_hybrids": true,
       "exclude_colors": [
         "weiß",
         "weiss",
         "white",
-        "pure white",
         "oryxweiß",
-        "alpinweiß"
-      ],
-      "preferred_colors": [
-        "blau",
-        "blue",
-        "anemonenblau",
-        "lapizblau",
-        "navarrablau",
-        "portimao blau",
-        "misano blau",
-        "rot",
-        "red",
-        "tornadorot",
-        "kings red",
-        "tarragonarot",
-        "tangorot"
+        "alpinweiß",
+        "pure white"
       ]
-    },
-    "fuel_consumption": {
-      "importance": "high",
-      "max_combined_l_100km": 7.5,
-      "target_l_100km": 6.8
     },
     "models": [
       {
         "make": "Volkswagen",
-        "model": "Golf",
-        "reference_segment": "Golf-Klasse",
-        "notes": "Reine TSI-Benziner (2.0 TSI GTI / 1.5 TSI ohne eTSI) 150-200 PS"
+        "model": "Golf"
       },
       {
         "make": "BMW",
-        "model": "1er",
-        "reference_segment": "Golf-Klasse",
-        "notes": "Reine Benziner 120i / 128ti im 150-200 PS Spektrum"
+        "model": "1er"
       },
       {
         "make": "Cupra",
-        "model": "Leon",
-        "reference_segment": "Golf-Klasse",
-        "notes": "Reiner 2.0 TSI Benziner (VZ / VZ-Line ohne e-Hybrid)"
+        "model": "Leon"
       },
       {
         "make": "Audi",
-        "model": "A3",
-        "reference_segment": "Golf-Klasse",
-        "notes": "A3 35 TFSI / 40 TFSI reine Benziner (ohne TFSIe / Mild-Hybrid)"
-      },
-      {
-        "make": "Mercedes-Benz",
-        "model": "A-Klasse",
-        "reference_segment": "Golf-Klasse",
-        "notes": "A 200 / A 220 reine Benziner (ohne 250e Hybrid)"
+        "model": "A3"
       },
       {
         "make": "Hyundai",
-        "model": "i30",
-        "reference_segment": "Golf-Klasse",
-        "notes": "i30 1.5 T-GDI / N-Line Benzin Automatik"
-      }
-    ],
-    "desired_features": [
-      {
-        "id": "hud",
-        "name": "Head-Up Display",
-        "weight_tier": "core",
-        "keywords": [
-          "head-up",
-          "head up",
-          "head-up display",
-          "head up display",
-          "hud"
-        ]
-      },
-      {
-        "id": "wireless_charging",
-        "name": "Kabelloses Smartphone-Laden",
-        "weight_tier": "core",
-        "keywords": [
-          "kabelloses laden",
-          "wireless charging",
-          "induktionsladen",
-          "induktiv",
-          "telefonablage mit induktiver ladefunktion",
-          "wireless charge",
-          "handy kabellos"
-        ]
-      },
-      {
-        "id": "park_assist",
-        "name": "Parkassistent / Parklenkassistent",
-        "weight_tier": "core",
-        "keywords": [
-          "park assist",
-          "parkassistent",
-          "parklenkassistent",
-          "selbstlenkende systeme",
-          "automatisches einparken",
-          "park assistant",
-          "parking assistant"
-        ]
-      },
-      {
-        "id": "wheels_tires",
-        "name": "Leichtmetallfelgen 18/19 Zoll",
-        "weight_tier": "core",
-        "keywords": [
-          "18 zoll",
-          "19 zoll",
-          "18\"",
-          "19\"",
-          "18 zoll alu",
-          "19 zoll alu",
-          "leichtmetallräder 18",
-          "leichtmetallräder 19",
-          "alufelgen 18",
-          "alufelgen 19",
-          "m leichtmetallräder",
-          "rotary",
-          "estoril"
-        ]
-      },
-      {
-        "id": "camera_360",
-        "name": "360° Kamera / Umgebungskamera (Nice-to-Have)",
-        "weight_tier": "bonus",
-        "keywords": [
-          "360",
-          "360 grad",
-          "360°",
-          "area view",
-          "surround view",
-          "umgebungskamera",
-          "front- und rückfahrkamera",
-          "draufsicht",
-          "rundumsicht"
-        ]
-      },
-      {
-        "id": "matrix_led",
-        "name": "Matrix LED-Scheinwerfer",
-        "weight_tier": "core",
-        "keywords": [
-          "matrix",
-          "matrix led",
-          "iq.light",
-          "iq light",
-          "multibeam",
-          "laserlight",
-          "adaptive led",
-          "blendfreies fernlicht"
-        ]
-      },
-      {
-        "id": "massage_seats",
-        "name": "Massagesitz / ErgoActive",
-        "weight_tier": "core",
-        "keywords": [
-          "massage",
-          "massagesitz",
-          "massagesitze",
-          "ergoactive",
-          "ergocomfort",
-          "multikontursitz",
-          "aktivsitz"
-        ]
-      },
-      {
-        "id": "climate_2zone",
-        "name": "Mind. 2-Zonen Klimaautomatik",
-        "weight_tier": "core",
-        "keywords": [
-          "2-zonen",
-          "2 zonen",
-          "3-zonen",
-          "3 zonen",
-          "climatronic",
-          "thermotronic",
-          "klimaautomatik 2-zonen",
-          "mehrzonen-klimaautomatik"
-        ]
-      },
-      {
-        "id": "acc",
-        "name": "ACC / Adaptiver Tempomat",
-        "weight_tier": "core",
-        "keywords": [
-          "acc",
-          "abstandstempomat",
-          "adaptiver tempomat",
-          "distronic",
-          "travel assist",
-          "adaptive cruise control"
-        ]
-      },
-      {
-        "id": "carplay",
-        "name": "Apple CarPlay",
-        "weight_tier": "core",
-        "keywords": [
-          "carplay",
-          "apple carplay",
-          "smartphone integration",
-          "app-connect",
-          "wireless carplay"
-        ]
-      },
-      {
-        "id": "seat_heating",
-        "name": "Sitzheizung",
-        "weight_tier": "core",
-        "keywords": [
-          "sitzheizung",
-          "heated seats",
-          "beheizbare vordersitze"
-        ]
+        "model": "i30"
       }
     ]
   },
   "scoring_weights": {
-    "market_price": 0.22,
     "features": 0.23,
-    "consumption": 0.10,
-    "color_preference": 0.05,
+    "market_price": 0.22,
     "mileage": 0.15,
+    "consumption": 0.10,
     "age": 0.08,
     "power": 0.07,
-    "distance": 0.05,
-    "price_trend": 0.05
+    "distance": 0.10,
+    "color_preference": 0.05
   },
-  "rules": {
+  "scoring_rules": {
     "inactivity_threshold_runs": 3,
-    "notification_deal_score_threshold": 90,
-    "notification_price_drop_threshold": 500
+    "preferred_colors": [
+      "blau",
+      "blue",
+      "rot",
+      "red",
+      "anemonenblau",
+      "lapizblau",
+      "misanorot",
+      "tarragonarot",
+      "navarrablau",
+      "sunset red"
+    ],
+    "target_consumption_l100km": 6.2,
+    "feature_aliases": {
+      "Matrix LED-Scheinwerfer": [
+        "matrix",
+        "iq.light",
+        "iq light",
+        "adaptive led",
+        "laserlicht",
+        "multibeam",
+        "voll-led"
+      ],
+      "Massagesitz / ErgoActive": [
+        "massage",
+        "ergoactive",
+        "ergonomiesitz",
+        "aktivsitz",
+        "lordosenstütze"
+      ],
+      "Head-Up Display": [
+        "head-up",
+        "head up",
+        "hud",
+        "headup"
+      ],
+      "ACC / adaptiver Tempomat": [
+        "acc",
+        "abstandstempomat",
+        "adaptiver tempomat",
+        "distronic",
+        "travel assist",
+        "pcc"
+      ],
+      "Apple CarPlay / Android Auto": [
+        "carplay",
+        "android auto",
+        "app-connect",
+        "smartphone interface",
+        "smartlink"
+      ],
+      "Parkassistent / 360°": [
+        "park assist",
+        "parklenkassistent",
+        "360 grad",
+        "umgebungskamera",
+        "surround view",
+        "rückfahrkamera"
+      ],
+      "Kabelloses Smartphone-Laden": [
+        "induktion",
+        "wireless charging",
+        "kabellos laden",
+        "induktionsladen",
+        "ablage für kabelloses laden"
+      ],
+      "Mind. 2-Zonen Klimaautomatik": [
+        "2-zonen",
+        "3-zonen",
+        "climatronic",
+        "klimaautomatik"
+      ],
+      "Sitzheizung": [
+        "sitzheizung",
+        "beheizbare vordersitze"
+      ],
+      "Leichtmetallfelgen 18/19 Zoll": [
+        "18 zoll",
+        "19 zoll",
+        "18\"",
+        "19\"",
+        "leichtmetallräder"
+      ]
+    }
   }
 }

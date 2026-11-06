@@ -1,206 +1,390 @@
+import os
 import json
 import logging
-import os
+import re
+from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.database.repository import DatabaseRepository
 from app.database.models import CarListing, SearchLog
-from app.providers.apify import ApifyProvider
 from app.providers.demo import DemoProvider
-from app.providers.mobile_de import MobileDeProvider
-from app.providers.autoscout24 import AutoScout24Provider
-from app.services.deduplication import DeduplicationService
-from app.services.market_analysis import MarketAnalysisService
-from app.services.scoring import ScoringService
-from app.services.price_history import PriceHistoryService
-from app.services.notifications import NotificationService
+from app.providers.apify import ApifyProvider
 
 logger = logging.getLogger(__name__)
 
+
+class PriceService:
+    @staticmethod
+    def calculate_price_metrics(price_history: list, current_price: float) -> dict:
+        if not price_history or len(price_history) <= 1:
+            return {
+                "initial_price": current_price,
+                "current_price": current_price,
+                "price_drop_total": 0.0,
+                "price_drop_percent": 0.0,
+                "changes_count": 0,
+                "summary": "Bisher stabiler Preis"
+            }
+
+        initial_price = price_history[0].price
+        drop = initial_price - current_price
+        drop_pct = round((drop / initial_price) * 100, 1) if initial_price > 0 else 0.0
+
+        if drop > 0:
+            summary = f"Preissenkung: -{int(drop):,} € (-{drop_pct}%) seit Erstbeobachtung".replace(",", ".")
+        elif drop < 0:
+            summary = f"Preiserhöhung: +{int(abs(drop)):,} € seit Erstbeobachtung".replace(",", ".")
+        else:
+            summary = f"{len(price_history) - 1} Preisanpassungen dokumentiert"
+
+        return {
+            "initial_price": initial_price,
+            "current_price": current_price,
+            "price_drop_total": drop,
+            "price_drop_percent": drop_pct,
+            "changes_count": len(price_history) - 1,
+            "summary": summary
+        }
+
+
 class SearchService:
-    def __init__(self, repo: DatabaseRepository, config_path: str = "config.json"):
+    def __init__(self, repo: DatabaseRepository, config_path: Optional[Path] = None):
         self.repo = repo
-        self.config_path = config_path
-        self.dedup = DeduplicationService()
-        self.market = MarketAnalysisService()
-        self.price_service = PriceHistoryService()
-        self.notif = NotificationService()
+        self.config_path = config_path or (Path(__file__).resolve().parent.parent.parent / "config.json")
+        self.price_service = PriceService()
+        
+    def rescore_all_listings(self) -> int:
+        """
+        Lädt die aktuelle config.json und bewertet alle aktiven Fahrzeuge in der
+        SQLite-Datenbank neu, ohne externe Scraper oder APIs aufzurufen.
+        """
+        config = self.load_config()
+        all_active_cars = self.repo.get_all_cars(only_active=True, canonical_only=False)
+
+        if not all_active_cars:
+            logger.info("Keine aktiven Fahrzeuge zum Neubewerten vorhanden.")
+            return 0
+
+        # Marktmedian und Peer-Metriken neu bestimmen
+        median_price, mean_price = self._calculate_market_metrics(all_active_cars)
+
+        for car in all_active_cars:
+            # 8-Kriterien-Scoring mit aktuellen Gewichten und Aliasen durchführen
+            self._score_car(car, median_price, mean_price, config)
+            self.repo.save_car(car)
+
+        logger.info(f"{len(all_active_cars)} Fahrzeuge mit neuen Kriterien erfolgreich neu bewertet.")
+        return len(all_active_cars)
 
     def load_config(self) -> Dict[str, Any]:
-        if os.path.exists(self.config_path):
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Fehler beim Lesen der config.json: {e}")
         return {}
 
-    def get_providers(self) -> list:
-        mode = os.getenv("PROVIDER_MODE", "demo").lower()
+    def get_active_provider(self):
+        mode = os.getenv("PROVIDER_MODE", "demo").strip().lower()
         if mode == "apify":
-            return [ApifyProvider()]
-        elif mode == "live_direct":
-            return [MobileDeProvider(), AutoScout24Provider()]
-        return [DemoProvider()]
+            return ApifyProvider()
+        return DemoProvider()
 
-    def is_car_acceptable(self, car: CarListing, filters: Dict[str, Any]) -> bool:
-        """
-        Prüft strikte Ausschlusskriterien:
-        - Reiner Benziner (kein Diesel, kein Gas/Elektro)
-        - Kein Hybrid (MHEV, PHEV, eTSI, GTE, Plug-in etc.)
-        - Keine Privatverkäufe
-        - Keine weißen Fahrzeuge
-        """
-        all_text = f"{car.title} {' '.join(car.features)} {car.dealer_name} {car.fuel_type}".lower()
-
-        # 1. Kraftstoffprüfung
-        expected_fuel = filters.get("fuel_type", "Benzin").lower()
-        if expected_fuel not in car.fuel_type.lower() and expected_fuel not in all_text:
-            return False
-
-        # 2. Hybrid-Ausschluss
-        if filters.get("exclude_hybrids", True):
-            hybrid_keywords = filters.get("hybrid_negative_keywords", [
-                "hybrid", "mhev", "phev", "plug-in", "plugin", "e-hybrid", "gte", "etsi"
-            ])
-            if any(kw.lower() in all_text for kw in hybrid_keywords):
-                logger.info(f"Fahrzeug {car.title} verworfen: Hybrid/eTSI erkannt.")
-                return False
-
-        # 3. Keine Privatverkäufe
-        if filters.get("exclude_private_sellers", True):
-            dealer_lower = (car.dealer_name or "").lower()
-            if not dealer_lower or "privat" in dealer_lower or "private" in dealer_lower:
-                logger.info(f"Fahrzeug {car.title} verworfen: Privatverkauf.")
-                return False
-
-        # 4. Ausschluss weißer Fahrzeuge
-        excluded_colors = filters.get("exclude_colors", ["weiß", "weiss", "white", "oryxweiß", "alpinweiß"])
-        if any(c.lower() in all_text for c in excluded_colors):
-            logger.info(f"Fahrzeug {car.title} verworfen: Weißer Lack.")
-            return False
-
-        return True
-
-    def run_search_pipeline(self) -> SearchLog:
+    def run_search_pipeline(self):
+        start_time = datetime.utcnow()
         config = self.load_config()
-        criteria = config.get("search_criteria", {})
-        filters = criteria.get("filters", {})
+        provider = self.get_active_provider()
 
-        start_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        providers = self.get_providers()
-        provider_names = ", ".join([p.name for p in providers])
+        logger.info(f"Starte Auto-Agent Suchlauf mit: {provider.name}")
 
-        logger.info(f"Starte Auto-Agent Suchlauf mit: {provider_names}")
+        try:
+            raw_listings = provider.search(config)
+        except Exception as e:
+            logger.error(f"Fehler beim Aufruf des Providers {provider.name}: {e}", exc_info=True)
+            raw_listings = []
 
-        all_raw: List[CarListing] = []
-        errors: List[str] = []
+        logger.info(f"Provider {provider.name} lieferte {len(raw_listings)} Roh-Inserate.")
 
-        for p in providers:
-            try:
-                res = p.search(config)
-                all_raw.extend(res)
-                logger.info(f"Provider {p.name} lieferte {len(res)} Roh-Inserate.")
-            except Exception as e:
-                err = f"Fehler bei {p.name}: {str(e)}"
-                logger.error(err)
-                errors.append(err)
+        # 1. Filter anwenden
+        filtered_listings = self._filter_listings(raw_listings, config)
+        logger.info(f"{len(filtered_listings)} von {len(raw_listings)} Inseraten entsprechen allen Kriterien (Benziner, kein Hybrid, kein Weiß, Händler).")
 
-        # ---------------------------------------------------------
-        # Strikte Filterung anwenden
-        # ---------------------------------------------------------
-        filtered_listings = [c for c in all_raw if self.is_car_acceptable(c, filters)]
-        logger.info(f"{len(filtered_listings)} von {len(all_raw)} Inseraten entsprechen allen Kriterien (Benziner, kein Hybrid, kein Weiß, Händler).")
+        # 2. Markt-Median & Peers berechnen
+        median_price, mean_price = self._calculate_market_metrics(filtered_listings)
 
-        new_count = 0
-        price_change_count = 0
-        current_run_keys = set()
+        # 3. Scoring & Merkmals-Normalisierung
+        scored_listings = []
+        for car in filtered_listings:
+            self._score_car(car, median_price, mean_price, config)
+            scored_listings.append(car)
 
-        for item in filtered_listings:
-            current_run_keys.add((item.provider, item.external_id))
-            existing = self.repo.get_car_by_external_id(item.provider, item.external_id)
+        # 4. Dubletten-Erkennung
+        self._detect_duplicates(scored_listings)
 
-            if not existing:
-                item.id = self.repo.save_car(item)
-                new_count += 1
+        # 5. Speichern & Preishistorie pflegen
+        new_found = 0
+        price_changes = 0
+        duplicates_detected = 0
+        seen_external_ids = set()
+
+        for car in scored_listings:
+            seen_external_ids.add((car.provider, car.external_id))
+            if car.duplicate_info:
+                duplicates_detected += 1
+
+            existing = self.repo.get_car_by_external_id(car.provider, car.external_id)
+            if existing is None:
+                car.first_seen = start_time.strftime("%Y-%m-%d %H:%M:%S")
+                car.last_seen = start_time.strftime("%Y-%m-%d %H:%M:%S")
+                car.is_active = True
+                car.consecutive_missing_runs = 0
+                self.repo.save_car(car)
+                new_found += 1
             else:
-                item.id = existing.id
-                item.first_seen = existing.first_seen
-                item.is_favorite = existing.is_favorite
-                item.consecutive_missing_runs = 0
-                item.is_active = True
+                # Bestehende Felder & Preishistorie aktualisieren
+                car.id = existing.id
+                car.first_seen = existing.first_seen
+                car.last_seen = start_time.strftime("%Y-%m-%d %H:%M:%S")
+                car.is_active = True
+                car.consecutive_missing_runs = 0
+                car.is_favorite = existing.is_favorite
 
-                # Preisänderung protokollieren
-                if abs(existing.price - item.price) >= 1.0:
-                    self.repo.add_price_record(existing.id, item.price)
-                    price_change_count += 1
-                    drop_thresh = config.get("rules", {}).get("notification_price_drop_threshold", 500)
-                    if existing.price - item.price >= drop_thresh:
-                        self.notif.notify_top_deal(item, reason=f"PREISREDUZIERUNG (-{int(existing.price - item.price)} EUR)")
+                if abs(existing.price - car.price) > 1.0:
+                    self.repo.add_price_record(car.id, car.price, car.last_seen)
+                    price_changes += 1
 
-                self.repo.save_car(item)
+                self.repo.save_car(car)
 
-        # ---------------------------------------------------------
-        # Inaktivitätsprüfung für verschwundene Inserate
-        # ---------------------------------------------------------
-        threshold = config.get("rules", {}).get("inactivity_threshold_runs", 3)
-        deactivated_count = 0
-        all_active_db = self.repo.get_all_cars(only_active=True, canonical_only=False)
+        # 6. Verschwundene Inserate erfassen
+        deactivated_count = self._handle_missing_listings(seen_external_ids, config)
 
-        for car in all_active_db:
-            if (car.provider, car.external_id) not in current_run_keys:
+        end_time = datetime.utcnow()
+        logger.info(
+            f"Suchlauf beendet: {len(scored_listings)} valide Treffer, "
+            f"{new_found} neu, {price_changes} Preisänderungen, {duplicates_detected} Dubletten."
+        )
+
+        # 7. Suchlauf protokollieren
+        log = SearchLog(
+            id=None,
+            start_time=start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            end_time=end_time.strftime("%Y-%m-%d %H:%M:%S"),
+            provider=provider.name,
+            total_found=len(scored_listings),
+            new_found=new_found,
+            price_changes=price_changes,
+            duplicates_detected=duplicates_detected,
+            deactivated_count=deactivated_count,
+            errors=""
+        )
+        self.repo.log_search_run(log)
+
+    def _filter_listings(self, listings: List[CarListing], config: Dict[str, Any]) -> List[CarListing]:
+        filters = config.get("search_criteria", {}).get("filters", {})
+        max_price = filters.get("max_price", 27000)
+        max_mileage = filters.get("max_mileage", 80000)
+        min_year = filters.get("min_year", 2020)
+        min_power = filters.get("min_power_hp", 150)
+        max_power = filters.get("max_power_hp", 200)
+        dealer_only = filters.get("dealer_only", True)
+        exclude_hybrids = filters.get("exclude_hybrids", True)
+        excluded_colors = [c.lower() for c in filters.get("exclude_colors", [])]
+
+        valid = []
+        hybrid_keywords = ["hybrid", "mhev", "mild-hybrid", "mild hybrid", "phev", "plug-in", "48v", "etsi", "gte"]
+
+        for car in listings:
+            # 1. Budget & Fahrleistung
+            if car.price > max_price or car.price <= 1000:
+                continue
+            if car.mileage > max_mileage:
+                continue
+            if car.first_registration_year < min_year:
+                continue
+            if not (min_power <= car.power_hp <= max_power):
+                continue
+
+            # 2. Reiner Benziner (keine Hybride)
+            full_text = f"{car.title} {car.fuel_type} {' '.join(car.features)}".lower()
+            if exclude_hybrids and any(hk in full_text for hk in hybrid_keywords):
+                continue
+            if "benzin" not in car.fuel_type.lower() and "petrol" not in car.fuel_type.lower():
+                continue
+
+            # 3. Weiß ausschließen
+            if any(ec in full_text for ec in excluded_colors):
+                continue
+
+            # 4. Nur Händlerangebote
+            if dealer_only:
+                seller = (car.dealer_name or "").lower()
+                if "privat" in seller or seller == "":
+                    continue
+
+            valid.append(car)
+
+        return valid
+
+    def _calculate_market_metrics(self, listings: List[CarListing]) -> tuple:
+        if not listings:
+            return 24500.0, 24500.0
+        prices = sorted([c.price for c in listings])
+        n = len(prices)
+        median = (prices[n // 2] if n % 2 != 0 else (prices[n // 2 - 1] + prices[n // 2]) / 2)
+        mean = sum(prices) / n
+        return float(median), float(mean)
+
+    def _score_car(self, car: CarListing, median_price: float, mean_price: float, config: Dict[str, Any]):
+        weights = config.get("scoring_weights", {})
+        rules = config.get("scoring_rules", {})
+        aliases = rules.get("feature_aliases", {})
+        preferred_colors = [c.lower() for c in rules.get("preferred_colors", ["blau", "rot"])]
+
+        # A) Ausstattungs-Score via Synonym-Matching
+        combined_text = f"{car.title.lower()} {' '.join(car.features).lower()}"
+        matched_features = []
+        for std_name, syn_list in aliases.items():
+            checks = [std_name.lower()] + [s.lower() for s in syn_list]
+            if any(term in combined_text for term in checks):
+                matched_features.append(std_name)
+
+        car.features = matched_features
+        total_wanted = max(1, len(aliases))
+        score_features = round((len(matched_features) / total_wanted) * 100.0, 1)
+
+        # B) Marktpreis-Score (Verhältnis zum Median)
+        diff_median = car.price - median_price
+        diff_pct = round((diff_median / median_price) * 100, 1)
+        score_market = max(0.0, min(100.0, 50.0 - (diff_pct * 3.0)))
+
+        # C) Laufleistungs-Score
+        score_mileage = max(0.0, min(100.0, 100.0 - (car.mileage / 800.0)))
+
+        # D) Spritverbrauchs-Score
+        # Extrahiere Angabe wie '6.5 l/100km' aus Titel oder Standardwert
+        cons_match = re.search(r"(\d+[.,]\d+)\s*(l|liter)", combined_text)
+        cons_val = float(cons_match.group(1).replace(",", ".")) if cons_match else 6.6
+        score_consumption = max(0.0, min(100.0, 100.0 - ((cons_val - 5.5) * 35.0)))
+
+        # E) Alters-Score (Baujahr)
+        age_years = max(0, datetime.utcnow().year - car.first_registration_year)
+        score_age = max(0.0, min(100.0, 100.0 - (age_years * 18.0)))
+
+        # F) Motorleistung
+        score_power = max(0.0, min(100.0, ((car.power_hp - 150) / 50.0) * 100.0))
+
+        # G) Farb-Präferenz
+        is_fav_color = any(fc in combined_text for fc in preferred_colors)
+        score_color = 100.0 if is_fav_color else 40.0
+
+        # H) Distanz-Score
+        score_distance = max(0.0, min(100.0, 100.0 - (car.distance_km * 0.8)))
+
+        # Gesamt-Deal-Score gewichten
+        total_score = (
+            score_features * weights.get("features", 0.23) +
+            score_market * weights.get("market_price", 0.22) +
+            score_mileage * weights.get("mileage", 0.15) +
+            score_consumption * weights.get("consumption", 0.10) +
+            score_age * weights.get("age", 0.08) +
+            score_power * weights.get("power", 0.07) +
+            score_distance * weights.get("distance", 0.10) +
+            score_color * weights.get("color_preference", 0.05)
+        )
+
+        car.deal_score = round(max(0.0, min(100.0, total_score)), 1)
+        car.sub_scores = {
+            "features": round(score_features, 1),
+            "market_price": round(score_market, 1),
+            "mileage": round(score_mileage, 1),
+            "consumption": round(score_consumption, 1),
+            "age": round(score_age, 1),
+            "power": round(score_power, 1),
+            "distance": round(score_distance, 1),
+            "color_preference": round(score_color, 1)
+        }
+
+        # Markt-Statistiken für Detailseite & PDF
+        summary_text = (
+            f"Liegt {abs(int(diff_median)):,} € unter dem Median ({abs(diff_pct)}% Ersparnis)"
+            if diff_median < 0 else
+            f"Liegt {int(diff_median):,} € über dem Median (+{diff_pct}%)"
+        ).replace(",", ".")
+
+        car.market_stats = {
+            "median_price": median_price,
+            "mean_price": round(mean_price, 2),
+            "diff_to_median": round(diff_median, 2),
+            "diff_percent": diff_pct,
+            "peer_count": len([c for c in [car]]),
+            "summary": summary_text
+        }
+
+        # Pros & Cons generieren
+        pros, cons = [], []
+        if diff_median <= -1000:
+            pros.append(f"Hervorragender Preis ({abs(int(diff_median)):,} € unter Marktwert)".replace(",", "."))
+        if is_fav_color:
+            pros.append("Bevorzugte Wunschlackierung (Blau / Rot)")
+        if "Matrix LED-Scheinwerfer" in matched_features:
+            pros.append("Matrix LED / Adaptives Licht vorhanden")
+        if "Massagesitz / ErgoActive" in matched_features:
+            pros.append("Ergonomie-/Massagesitz verbaut")
+        if car.mileage < 40000:
+            pros.append(f"Geringe Gesamtlaufleistung ({car.mileage:,} km)".replace(",", "."))
+        if car.distance_km < 30:
+            pros.append(f"Kurze Anfahrt ({round(car.distance_km, 1)} km)")
+
+        if diff_median > 1000:
+            cons.append(f"Höherer Preis (+{int(diff_median):,} € über Median)".replace(",", "."))
+        if car.distance_km > 75:
+            cons.append(f"Längere Anfahrt ({round(car.distance_km, 1)} km)")
+        if "Head-Up Display" not in matched_features:
+            cons.append("Kein Head-Up Display dokumentiert")
+        if not is_fav_color:
+            cons.append("Standardlackierung (nicht Blau/Rot)")
+
+        car.pros = pros if pros else ["Solide Gesamtausstattung"]
+        car.cons = cons if cons else ["Keine relevanten Mängel"]
+
+    def _detect_duplicates(self, listings: List[CarListing]):
+        """Erkennt identische Fahrzeuge auf mehreren Plattformen (z.B. mobile.de & AutoScout24)."""
+        n = len(listings)
+        for i in range(n):
+            for j in range(i + 1, n):
+                c1, c2 = listings[i], listings[j]
+                if c1.make.lower() == c2.make.lower() and c1.model.lower() == c2.model.lower():
+                    # Gleiche Leistung & Kilometerstand & Postleitzahl
+                    same_specs = (
+                        c1.power_hp == c2.power_hp and
+                        abs(c1.mileage - c2.mileage) <= 50 and
+                        c1.first_registration_year == c2.first_registration_year and
+                        c1.postal_code == c2.postal_code
+                    )
+                    if same_specs:
+                        cheaper, expensive = (c1, c2) if c1.price <= c2.price else (c2, c1)
+                        expensive.canonical_id = cheaper.id
+                        diff = expensive.price - cheaper.price
+                        expensive.duplicate_info = {
+                            "is_duplicate": True,
+                            "original_provider": cheaper.provider,
+                            "price_diff": diff,
+                            "message": f"Auch auf {cheaper.provider} gefunden (-{int(diff)} €)"
+                        }
+
+    def _handle_missing_listings(self, seen_ids: set, config: Dict[str, Any]) -> int:
+        threshold = config.get("scoring_rules", {}).get("inactivity_threshold_runs", 3)
+        all_cars = self.repo.get_all_cars(only_active=True, canonical_only=False)
+        deactivated = 0
+
+        for car in all_cars:
+            if (car.provider, car.external_id) not in seen_ids:
                 car.consecutive_missing_runs += 1
                 if car.consecutive_missing_runs >= threshold:
                     car.is_active = False
-                    deactivated_count += 1
-                    logger.info(f"Fahrzeug #{car.id} ({car.title}) nach {car.consecutive_missing_runs} fehlenden Läufen deaktiviert.")
+                    deactivated += 1
                 self.repo.save_car(car)
 
-        # ---------------------------------------------------------
-        # Dublettenerkennung & Deal-Score Berechnung
-        # ---------------------------------------------------------
-        active_cars = self.repo.get_all_cars(only_active=True, canonical_only=False)
-        _, dup_count = self.dedup.deduplicate(active_cars)
-        scorer = ScoringService(config=config)
-
-        for car in active_cars:
-            history = self.repo.get_price_history(car.id)
-            metrics = self.price_service.calculate_price_metrics(history, car.price)
-
-            first_dt = datetime.strptime(car.first_seen, "%Y-%m-%d %H:%M:%S") if car.first_seen else datetime.utcnow()
-            days_online = max(1, (datetime.utcnow() - first_dt).days)
-
-            market_stats = self.market.analyze_car(car, active_cars)
-            car.market_stats = market_stats
-
-            scoring_res = scorer.calculate_scores(
-                car=car,
-                market_stats=market_stats,
-                price_drop_total=metrics["price_drop_total"],
-                days_online=days_online
-            )
-
-            car.deal_score = scoring_res["deal_score"]
-            car.sub_scores = scoring_res["sub_scores"]
-            car.pros = scoring_res["pros"]
-            car.cons = scoring_res["cons"]
-
-            self.repo.save_car(car)
-
-            score_thresh = config.get("rules", {}).get("notification_deal_score_threshold", 90)
-            if car.deal_score >= score_thresh and days_online <= 1:
-                self.notif.notify_top_deal(car, reason=f"TOP DEAL ({car.deal_score}/100)")
-
-        end_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = SearchLog(
-            start_time=start_time,
-            end_time=end_time,
-            provider=provider_names,
-            total_found=len(filtered_listings),
-            new_found=new_count,
-            price_changes=price_change_count,
-            duplicates_detected=dup_count,
-            deactivated_count=deactivated_count,
-            errors="; ".join(errors)
-        )
-        self.repo.log_search_run(log_entry)
-        logger.info(f"Suchlauf beendet: {len(filtered_listings)} valide Treffer, {new_count} neu, {price_change_count} Preisänderungen, {dup_count} Dubletten.")
-        return log_entry
+        return deactivated

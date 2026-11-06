@@ -221,3 +221,32 @@ class ScoringService:
         elif hp >= 170:
             return 6.7
         return 6.3
+        
+    # In app/services/scoring.py
+
+    def calculate_feature_score(self, car_features: list[str], car_title: str) -> tuple[float, list[str]]:
+    """
+    Ermittelt den Ausstattungs-Score (0-100) basierend auf hinterlegten Aliasen.
+    Gibt den Score und die Liste der erkannten Standardmerkmale zurück.
+    """
+    # Flacher Text aus Titel + Inseratsmerkmalen für schnellen Teilwort-Match
+    combined_text = f"{car_title.lower()} {' '.join(car_features).lower()}"
+    
+    aliases = self.config.get("scoring_rules", {}).get("feature_aliases", {})
+    if not aliases:
+        # Fallback falls keine Aliase definiert sind
+        return 50.0, []
+
+    matched_standard_features = []
+
+    for standard_name, variants in aliases.items():
+        # Treffer, wenn der Standardname selbst oder eines seiner Synonyme vorkommt
+        all_variants = [standard_name.lower()] + [v.lower() for v in variants]
+        if any(var in combined_text for var in all_variants):
+            matched_standard_features.append(standard_name)
+
+    # Anteil gefundener Features zu maximal gewünschten Features
+    total_wanted = len(aliases)
+    score = (len(matched_standard_features) / total_wanted) * 100.0 if total_wanted > 0 else 0.0
+
+    return round(score, 1), matched_standard_features

@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-black text-white">Konfiguration anpassen</h1>
+      <p class="text-xs text-slate-400">Verwalte Standort, Suchumkreis, Budget und Ausschlusskriterien direkt im Web.</p>
+    </div>
+    <a href="/" class="text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
+      <i class="fa-solid fa-arrow-left"></i>
+      <span>Dashboard</span>
+    </a>
+  </div>
+
+  <!-- Erfolgs- / Fehlermeldungen -->
+  {% if saved %}
+  <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+    <i class="fa-solid fa-circle-check"></i>
+    <span>Einstellungen wurden erfolgreich in config.json gespeichert!</span>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2">
+    <i class="fa-solid fa-circle-exclamation"></i>
+    <span>Fehler beim Speichern: {{ error }}</span>
+  </div>
+  {% endif %}
+
+  {% set loc = config.get('search_criteria', {}).get('location', {}) %}
+  {% set flt = config.get('search_criteria', {}).get('filters', {}) %}
+
+  <!-- Tab-Umschalter -->
+  <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+    <button type="button" onclick="switchTab('fields')" id="tabBtnFields" class="px-4 py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white">
+      <i class="fa-solid fa-sliders mr-1.5"></i> Formular-Ansicht
+    </button>
+    <button type="button" onclick="switchTab('raw')" id="tabBtnRaw" class="px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">
+      <i class="fa-solid fa-code mr-1.5"></i> JSON-Direkteditor
+    </button>
+  </div>
+
+  <form action="/api/rescore" method="POST" class="m-0">
+	<button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs border border-slate-700 shadow transition flex items-center gap-2" title="Aktualisiert die Scores aller gespeicherten Autos sofort">
+		<i class="fa-solid fa-calculator text-blue-400"></i>
+		<span>Alle Scores neu berechnen</span>
+	</button>
+  </form>
+
+  <form action="/settings/save" method="POST" id="settingsForm" class="space-y-6">
+    <input type="hidden" name="edit_mode" id="editModeInput" value="fields">
+
+    <!-- 1. FORMULAR-ANSICHT -->
+    <div id="sectionFields" class="space-y-6">
+      
+      <!-- Wohnort & Suchumkreis -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">		
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-location-dot text-rose-500"></i> Wohnort &amp; Suchradius
+        </h2>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Postleitzahl</label>
+            <input type="text" name="postal_code" value="{{ loc.get('postal_code', '97271') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Wohnort / Stadt</label>
+            <input type="text" name="city" value="{{ loc.get('city', 'Kleinrinderfeld') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Suchradius (km)</label>
+            <div class="flex items-center gap-2">
+              <input type="number" name="radius_km" value="{{ loc.get('radius_km', 100) }}" min="10" max="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+              <span class="text-slate-500 font-bold">km</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fahrzeug- & Budgetgrenzen -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-car text-blue-400"></i> Fahrzeug &amp; Budget
+        </h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Maximalpreis (€)</label>
+            <input type="number" name="max_price" value="{{ flt.get('max_price', 27000)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Max. Laufleistung (km)</label>
+            <input type="number" name="max_mileage" value="{{ flt.get('max_mileage', 80000)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Mindest-Erstzulassung</label>
+            <input type="number" name="min_year" value="{{ flt.get('min_year', 2020)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Mindestleistung (PS)</label>
+            <input type="number" name="min_power_hp" value="{{ flt.get('min_power_hp', 150)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Maximalleistung (PS)</label>
+            <input type="number" name="max_power_hp" value="{{ flt.get('max_power_hp', 200)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Ausschlusskriterien -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-ban text-amber-400"></i> Ausschlüsse
+        </h2>
+
+        <div class="space-y-3 text-xs">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="exclude_hybrids" value="true" {% if flt.get('exclude_hybrids', True) %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+            <span class="text-slate-300">Hybride ausschließen (keine Mild-Hybride / eTSI / PHEV)</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="exclude_white" value="true" {% if flt.get('exclude_colors') %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+            <span class="text-slate-300">Weiße Lackierungen komplett aussortieren</span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. JSON-DIREKTEDITOR -->
+    <div id="sectionRaw" class="hidden space-y-3">
+      <div class="glass-card rounded-2xl p-4 border border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Direktbearbeitung (config.json)</span>
+          <span class="text-[11px] text-slate-500">Syntax wird beim Speichern auf gültiges JSON geprüft</span>
+        </div>
+        <textarea name="raw_json" rows="22" class="w-full bg-slate-950 font-mono text-xs text-blue-300 p-4 rounded-xl border border-slate-800 outline-none focus:border-blue-500 leading-relaxed scrollbar-thin">{{ config_raw }}</textarea>
+      </div>
+    </div>
+
+    <!-- Speichern-Leiste -->
+    <div class="flex items-center justify-between pt-2">
+      <span class="text-xs text-slate-500 italic">Änderungen werden beim nächsten Suchlauf sofort wirksam.</span>
+      <button type="submit" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
+        <i class="fa-solid fa-floppy-disk"></i>
+        <span>Konfiguration speichern</span>
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<script>
+  function switchTab(mode) {
+    const editModeInput = document.getElementById('editModeInput');
+    const secFields = document.getElementById('sectionFields');
+    const secRaw = document.getElementById('sectionRaw');
+    const btnFields = document.getElementById('tabBtnFields');
+    const btnRaw = document.getElementById('tabBtnRaw');
+
+    editModeInput.value = mode;
+
+    if (mode === 'raw') {
+      secFields.classList.add('hidden');
+      secRaw.classList.remove('hidden');
+      btnRaw.className = 'px-4 py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white';
+      btnFields.className = 'px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white hover:bg-slate-800';
+    } else {
+      secRaw.classList.add('hidden');
+      secFields.classList.remove('hidden');
+      btnFields.className = 'px-4 py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white';
+      btnRaw.className = 'px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white hover:bg-slate-800';
+    }
+  }
+</script>
+{% endblock %}
