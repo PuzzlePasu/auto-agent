@@ -1,92 +1,92 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="max-w-5xl mx-auto space-y-6">
 
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-black text-white">Konfiguration anpassen</h1>
-      <p class="text-xs text-slate-400">Verwalte Standort, Suchumkreis, Budget und Ausschlusskriterien direkt im Web.</p>
+      <h1 class="text-2xl font-black text-white">System-Konfiguration</h1>
+      <p class="text-xs text-slate-400">Verwalte alle Parameter, Aliase (ACC, Matrix etc.), Gewichte und Filter ohne SSH-Zugriff.</p>
     </div>
-    <a href="/" class="text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1.5">
-      <i class="fa-solid fa-arrow-left"></i>
-      <span>Dashboard</span>
-    </a>
+    <div class="flex items-center gap-2">
+      <form action="/api/rescore" method="POST" class="m-0">
+        <button type="submit" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center gap-1.5" title="Berechnet alle Deal-Scores der Datenbank mit den aktuellen Werten neu">
+          <i class="fa-solid fa-calculator text-blue-400"></i>
+          <span>Neu bewerten</span>
+        </button>
+      </form>
+      <a href="/" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Dashboard</span>
+      </a>
+    </div>
   </div>
 
-  <!-- Erfolgs- / Fehlermeldungen -->
   {% if saved %}
   <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
     <i class="fa-solid fa-circle-check"></i>
-    <span>Einstellungen wurden erfolgreich in config.json gespeichert!</span>
+    <span>Konfiguration erfolgreich in <code>config.json</code> gespeichert und alle Fahrzeug-Scores aktualisiert!</span>
   </div>
   {% endif %}
 
   {% if error %}
   <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2">
     <i class="fa-solid fa-circle-exclamation"></i>
-    <span>Fehler beim Speichern: {{ error }}</span>
+    <span>Fehler: {{ error }}</span>
   </div>
   {% endif %}
 
   {% set loc = config.get('search_criteria', {}).get('location', {}) %}
   {% set flt = config.get('search_criteria', {}).get('filters', {}) %}
+  {% set wgt = config.get('scoring_weights', {}) %}
+  {% set rules = config.get('scoring_rules', {}) %}
+  {% set aliases = rules.get('feature_aliases', {}) %}
 
   <!-- Tab-Umschalter -->
   <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
     <button type="button" onclick="switchTab('fields')" id="tabBtnFields" class="px-4 py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white">
-      <i class="fa-solid fa-sliders mr-1.5"></i> Formular-Ansicht
+      <i class="fa-solid fa-sliders mr-1.5"></i> Visueller Editor
     </button>
     <button type="button" onclick="switchTab('raw')" id="tabBtnRaw" class="px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white hover:bg-slate-800">
       <i class="fa-solid fa-code mr-1.5"></i> JSON-Direkteditor
     </button>
   </div>
 
-  <form action="/api/rescore" method="POST" class="m-0">
-	<button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs border border-slate-700 shadow transition flex items-center gap-2" title="Aktualisiert die Scores aller gespeicherten Autos sofort">
-		<i class="fa-solid fa-calculator text-blue-400"></i>
-		<span>Alle Scores neu berechnen</span>
-	</button>
-  </form>
-
   <form action="/settings/save" method="POST" id="settingsForm" class="space-y-6">
     <input type="hidden" name="edit_mode" id="editModeInput" value="fields">
+    <input type="hidden" name="feature_aliases_json" id="featureAliasesJson">
+    <input type="hidden" name="preferred_colors_json" id="preferredColorsJson">
 
-    <!-- 1. FORMULAR-ANSICHT -->
+    <!-- 1. VISUELLER EDITOR -->
     <div id="sectionFields" class="space-y-6">
       
-      <!-- Wohnort & Suchumkreis -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">		
+      <!-- Standort & Suchradius -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-location-dot text-rose-500"></i> Wohnort &amp; Suchradius
+          <i class="fa-solid fa-location-dot text-rose-500"></i> Standort &amp; Suchradius
         </h2>
-        
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
             <label class="text-slate-400 font-semibold block mb-1">Postleitzahl</label>
             <input type="text" name="postal_code" value="{{ loc.get('postal_code', '97271') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
           <div>
-            <label class="text-slate-400 font-semibold block mb-1">Wohnort / Stadt</label>
+            <label class="text-slate-400 font-semibold block mb-1">Wohnort</label>
             <input type="text" name="city" value="{{ loc.get('city', 'Kleinrinderfeld') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
           <div>
             <label class="text-slate-400 font-semibold block mb-1">Suchradius (km)</label>
-            <div class="flex items-center gap-2">
-              <input type="number" name="radius_km" value="{{ loc.get('radius_km', 100) }}" min="10" max="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-              <span class="text-slate-500 font-bold">km</span>
-            </div>
+            <input type="number" name="radius_km" value="{{ loc.get('radius_km', 100) }}" min="10" max="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
         </div>
       </div>
 
-      <!-- Fahrzeug- & Budgetgrenzen -->
+      <!-- Fahrzeug- & Budgetfilter -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-car text-blue-400"></i> Fahrzeug &amp; Budget
+          <i class="fa-solid fa-car text-blue-400"></i> Fahrzeug-, Budget- &amp; Ausschlussfilter
         </h2>
-
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
             <label class="text-slate-400 font-semibold block mb-1">Maximalpreis (€)</label>
@@ -97,38 +97,141 @@
             <input type="number" name="max_mileage" value="{{ flt.get('max_mileage', 80000)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
           <div>
-            <label class="text-slate-400 font-semibold block mb-1">Mindest-Erstzulassung</label>
+            <label class="text-slate-400 font-semibold block mb-1">Mindest-Baujahr</label>
             <input type="number" name="min_year" value="{{ flt.get('min_year', 2020)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
           <div>
-            <label class="text-slate-400 font-semibold block mb-1">Mindestleistung (PS)</label>
+            <label class="text-slate-400 font-semibold block mb-1">Leistung von (PS)</label>
             <input type="number" name="min_power_hp" value="{{ flt.get('min_power_hp', 150)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
           <div>
-            <label class="text-slate-400 font-semibold block mb-1">Maximalleistung (PS)</label>
+            <label class="text-slate-400 font-semibold block mb-1">Leistung bis (PS)</label>
             <input type="number" name="max_power_hp" value="{{ flt.get('max_power_hp', 200)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
           </div>
         </div>
+
+        <div class="pt-2 flex flex-col sm:flex-row gap-4 text-xs">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="exclude_hybrids" value="true" {% if flt.get('exclude_hybrids', True) %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+            <span class="text-slate-300 font-medium">Hybride ausschließen (kein Mild-Hybrid / eTSI / PHEV)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="exclude_white" value="true" {% if flt.get('exclude_colors') %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+            <span class="text-slate-300 font-medium">Weiße Lackierungen ausschließen</span>
+          </label>
+        </div>
       </div>
 
-      <!-- Ausschlusskriterien -->
+      <!-- Dynamische Automodelle -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-blue-400"></i> Gesuchte Modelle
+          </h2>
+          <button type="button" onclick="addModelRow()" class="px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold hover:bg-blue-600/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus text-[10px]"></i> Modell hinzufügen
+          </button>
+        </div>
+        <div id="modelsContainer" class="space-y-2">
+          {% set models = config.get('search_criteria', {}).get('models', []) %}
+          {% for m in models %}
+          <div class="model-row flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
+            <input type="text" name="model_make" value="{{ m.make }}" placeholder="Hersteller" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500">
+            <input type="text" name="model_name" value="{{ m.model }}" placeholder="Modellreihe" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500">
+            <button type="button" onclick="this.closest('.model-row').remove()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition flex items-center justify-center">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Ausstattungsmerkmale & Synonym-Editor (ACC, Matrix, etc.) -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-indigo-400"></i> Ausstattungs-Aliase &amp; Synonym-Erkennung
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">Hier legst du fest, welche Begriffe im Inserat (Titel/Text) als z.B. <strong>ACC</strong>, <strong>Matrix LED</strong> oder <strong>ErgoActive</strong> gewertet werden.</p>
+          </div>
+          <button type="button" onclick="addNewFeatureGroup()" class="px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 text-xs font-semibold hover:bg-indigo-600/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus text-[10px]"></i> Merkmal hinzufügen
+          </button>
+        </div>
+
+        <div id="aliasesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Dynamisch via JavaScript befüllt -->
+        </div>
+      </div>
+
+      <!-- Wunschfarben & Spritverbrauchs-Regeln -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-ban text-amber-400"></i> Ausschlüsse
+          <i class="fa-solid fa-palette text-cyan-400"></i> Wunschfarben &amp; Verbrauchs-Target
         </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Ziel-Spritverbrauch (l/100km)</label>
+            <input type="number" step="0.1" name="target_consumption" value="{{ rules.get('target_consumption_l100km', 6.2) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Inaktiv nach X fehlenden Läufen</label>
+            <input type="number" name="inactivity_runs" value="{{ rules.get('inactivity_threshold_runs', 3) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
+          </div>
+        </div>
 
-        <div class="space-y-3 text-xs">
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" name="exclude_hybrids" value="true" {% if flt.get('exclude_hybrids', True) %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
-            <span class="text-slate-300">Hybride ausschließen (keine Mild-Hybride / eTSI / PHEV)</span>
-          </label>
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" name="exclude_white" value="true" {% if flt.get('exclude_colors') %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
-            <span class="text-slate-300">Weiße Lackierungen komplett aussortieren</span>
-          </label>
+        <div class="pt-2">
+          <label class="text-slate-400 font-semibold block mb-1 text-xs">Wunschfarben (Tag-Liste)</label>
+          <div class="flex items-center gap-2 mb-2">
+            <input type="text" id="newColorInput" placeholder="Farbe hinzufügen (z.B. anemonenblau, misanorot)..." class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-500" onkeydown="if(event.key==='Enter'){event.preventDefault(); addColorTag();}">
+            <button type="button" onclick="addColorTag()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition">Hinzufügen</button>
+          </div>
+          <div id="colorsContainer" class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-900/50 border border-slate-800 min-h-[38px]"></div>
+        </div>
+      </div>
+
+      <!-- Deal-Score Gewichtungen (%) -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-amber-400"></i> Score-Gewichtungen (%)
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Ausstattung</label>
+            <input type="number" name="weight_features" value="{{ (wgt.get('features', 0.23) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Marktpreis</label>
+            <input type="number" name="weight_market" value="{{ (wgt.get('market_price', 0.22) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Kilometerstand</label>
+            <input type="number" name="weight_mileage" value="{{ (wgt.get('mileage', 0.15) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Verbrauch</label>
+            <input type="number" name="weight_consumption" value="{{ (wgt.get('consumption', 0.10) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Distanz</label>
+            <input type="number" name="weight_distance" value="{{ (wgt.get('distance', 0.10) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Alter</label>
+            <input type="number" name="weight_age" value="{{ (wgt.get('age', 0.08) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Leistung</label>
+            <input type="number" name="weight_power" value="{{ (wgt.get('power', 0.07) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Wunschfarbe</label>
+            <input type="number" name="weight_color" value="{{ (wgt.get('color_preference', 0.05) * 100)|round|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold outline-none">
+          </div>
         </div>
       </div>
 
@@ -139,16 +242,19 @@
       <div class="glass-card rounded-2xl p-4 border border-slate-800">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Direktbearbeitung (config.json)</span>
-          <span class="text-[11px] text-slate-500">Syntax wird beim Speichern auf gültiges JSON geprüft</span>
+          <span class="text-[11px] text-slate-500">Wird beim Speichern validiert</span>
         </div>
-        <textarea name="raw_json" rows="22" class="w-full bg-slate-950 font-mono text-xs text-blue-300 p-4 rounded-xl border border-slate-800 outline-none focus:border-blue-500 leading-relaxed scrollbar-thin">{{ config_raw }}</textarea>
+        <textarea name="raw_json" rows="24" class="w-full bg-slate-950 font-mono text-xs text-blue-300 p-4 rounded-xl border border-slate-800 outline-none focus:border-blue-500 leading-relaxed scrollbar-thin">{{ config_raw }}</textarea>
       </div>
     </div>
 
-    <!-- Speichern-Leiste -->
+    <!-- Footer-Aktionen -->
     <div class="flex items-center justify-between pt-2">
-      <span class="text-xs text-slate-500 italic">Änderungen werden beim nächsten Suchlauf sofort wirksam.</span>
-      <button type="submit" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
+      <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+        <input type="checkbox" name="run_search_after" value="true" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+        <span>Direkt nach dem Speichern einen neuen Suchlauf starten</span>
+      </label>
+      <button type="submit" onclick="prepareSubmit()" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
         <i class="fa-solid fa-floppy-disk"></i>
         <span>Konfiguration speichern</span>
       </button>
@@ -158,14 +264,113 @@
 </div>
 
 <script>
+  // State für Aliase & Farben aus config.json
+  let featureAliases = {{ aliases|tojson }};
+  let preferredColors = {{ rules.get('preferred_colors', ['blau', 'rot', 'anemonenblau'])|tojson }};
+
+  function renderAliases() {
+    const container = document.getElementById('aliasesContainer');
+    container.innerHTML = '';
+
+    for (const [featName, synList] of Object.entries(featureAliases)) {
+      const card = document.createElement('div');
+      card.className = 'bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2';
+      
+      let badgesHtml = synList.map((syn, idx) => `
+        <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-300 text-[11px]">
+          ${syn}
+          <button type="button" onclick="removeSynonym('${featName.replace(/'/g, "\\'")}', ${idx})" class="text-slate-500 hover:text-rose-400 ml-0.5">×</button>
+        </span>
+      `).join('');
+
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-white">${featName}</span>
+          <button type="button" onclick="removeFeatureGroup('${featName.replace(/'/g, "\\'")}')" class="text-slate-500 hover:text-rose-400 text-xs" title="Gesamtes Merkmal löschen">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-1 min-h-[28px]">${badgesHtml}</div>
+        <div class="flex items-center gap-1.5 pt-1">
+          <input type="text" placeholder="Neues Synonym..." id="input_${btoa(unescape(encodeURIComponent(featName))).replace(/=/g, '')}" class="flex-1 bg-slate-950 border border-slate-700/80 rounded px-2.5 py-1 text-[11px] text-white outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter'){event.preventDefault(); addSynonymFromInput('${featName.replace(/'/g, "\\'")}', this);}">
+          <button type="button" onclick="addSynonymFromInput('${featName.replace(/'/g, "\\'")}', this.previousElementSibling)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] rounded transition">Add</button>
+        </div>
+      `;
+      container.appendChild(card);
+    }
+  }
+
+  function addSynonymFromInput(featName, inputElem) {
+    const val = inputElem.value.trim().toLowerCase();
+    if (!val) return;
+    if (!featureAliases[featName].includes(val)) {
+      featureAliases[featName].push(val);
+      renderAliases();
+    }
+  }
+
+  function removeSynonym(featName, index) {
+    featureAliases[featName].splice(index, 1);
+    renderAliases();
+  }
+
+  function removeFeatureGroup(featName) {
+    delete featureAliases[featName];
+    renderAliases();
+  }
+
+  function addNewFeatureGroup() {
+    const name = prompt("Name des Ausstattungsmerkmals (z.B. Standheizung):");
+    if (name && name.trim()) {
+      const clean = name.trim();
+      if (!featureAliases[clean]) {
+        featureAliases[clean] = [clean.toLowerCase()];
+        renderAliases();
+      }
+    }
+  }
+
+  // Farben-Logik
+  function renderColors() {
+    const container = document.getElementById('colorsContainer');
+    container.innerHTML = preferredColors.map((c, i) => `
+      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-800/60 text-cyan-200 text-xs">
+        ${c}
+        <button type="button" onclick="preferredColors.splice(${i}, 1); renderColors();" class="text-cyan-400 hover:text-rose-400 ml-1">×</button>
+      </span>
+    `).join('');
+  }
+
+  function addColorTag() {
+    const input = document.getElementById('newColorInput');
+    const val = input.value.trim().toLowerCase();
+    if (val && !preferredColors.includes(val)) {
+      preferredColors.push(val);
+      renderColors();
+    }
+    input.value = '';
+  }
+
+  function addModelRow() {
+    const container = document.getElementById('modelsContainer');
+    const row = document.createElement('div');
+    row.className = 'model-row flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800';
+    row.innerHTML = `
+      <input type="text" name="model_make" placeholder="Hersteller" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500">
+      <input type="text" name="model_name" placeholder="Modellreihe" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500">
+      <button type="button" onclick="this.closest('.model-row').remove()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition flex items-center justify-center">
+        <i class="fa-solid fa-trash text-xs"></i>
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
   function switchTab(mode) {
-    const editModeInput = document.getElementById('editModeInput');
+    document.getElementById('editModeInput').value = mode;
     const secFields = document.getElementById('sectionFields');
     const secRaw = document.getElementById('sectionRaw');
     const btnFields = document.getElementById('tabBtnFields');
     const btnRaw = document.getElementById('tabBtnRaw');
-
-    editModeInput.value = mode;
 
     if (mode === 'raw') {
       secFields.classList.add('hidden');
@@ -179,5 +384,15 @@
       btnRaw.className = 'px-4 py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white hover:bg-slate-800';
     }
   }
+
+  function prepareSubmit() {
+    document.getElementById('featureAliasesJson').value = JSON.stringify(featureAliases);
+    document.getElementById('preferredColorsJson').value = JSON.stringify(preferredColors);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    renderAliases();
+    renderColors();
+  });
 </script>
 {% endblock %}

@@ -53,29 +53,6 @@ class SearchService:
         self.repo = repo
         self.config_path = config_path or (Path(__file__).resolve().parent.parent.parent / "config.json")
         self.price_service = PriceService()
-        
-    def rescore_all_listings(self) -> int:
-        """
-        Lädt die aktuelle config.json und bewertet alle aktiven Fahrzeuge in der
-        SQLite-Datenbank neu, ohne externe Scraper oder APIs aufzurufen.
-        """
-        config = self.load_config()
-        all_active_cars = self.repo.get_all_cars(only_active=True, canonical_only=False)
-
-        if not all_active_cars:
-            logger.info("Keine aktiven Fahrzeuge zum Neubewerten vorhanden.")
-            return 0
-
-        # Marktmedian und Peer-Metriken neu bestimmen
-        median_price, mean_price = self._calculate_market_metrics(all_active_cars)
-
-        for car in all_active_cars:
-            # 8-Kriterien-Scoring mit aktuellen Gewichten und Aliasen durchführen
-            self._score_car(car, median_price, mean_price, config)
-            self.repo.save_car(car)
-
-        logger.info(f"{len(all_active_cars)} Fahrzeuge mit neuen Kriterien erfolgreich neu bewertet.")
-        return len(all_active_cars)
 
     def load_config(self) -> Dict[str, Any]:
         if self.config_path.exists():
@@ -92,6 +69,24 @@ class SearchService:
             return ApifyProvider()
         return DemoProvider()
 
+    @staticmethod
+    def _matches_alias(term: str, target_text: str) -> bool:
+        """
+        Prüft robust, ob ein Alias im Text vorkommt:
+        - Kurze Kürzel (z.B. ACC, HUD, DCC) verlangen strikte Wortgrenzen (\b).
+        - Begriffe mit Sonderzeichen (z.B. 'iq.light', 'stop&go') werden sauber maskiert.
+        """
+        clean_term = term.strip().lower()
+        if not clean_term:
+            return False
+
+        if len(clean_term) <= 4 and clean_term.isalnum():
+            pattern = rf"\b{re.escape(clean_term)}\b"
+        else:
+            pattern = rf"(?<![a-z0-9]){re.escape(clean_term)}(?![a-z0-9])"
+
+        return bool(re.search(pattern, target_text, re.IGNORECASE))
+
     def run_search_pipeline(self):
         start_time = datetime.utcnow()
         config = self.load_config()
@@ -107,11 +102,14 @@ class SearchService:
 
         logger.info(f"Provider {provider.name} lieferte {len(raw_listings)} Roh-Inserate.")
 
-        # 1. Filter anwenden
+        # 1. Strikte Filterung anwenden
         filtered_listings = self._filter_listings(raw_listings, config)
-        logger.info(f"{len(filtered_listings)} von {len(raw_listings)} Inseraten entsprechen allen Kriterien (Benziner, kein Hybrid, kein Weiß, Händler).")
+        logger.info(
+            f"{len(filtered_listings)} von {len(raw_listings)} Inseraten entsprechen allen Kriterien "
+            f"(Benziner, kein Hybrid, kein Weiß, Händler)."
+        )
 
-        # 2. Markt-Median & Peers berechnen
+        # 2. Markt-Median & Metriken berechnen
         median_price, mean_price = self._calculate_market_metrics(filtered_listings)
 
         # 3. Scoring & Merkmals-Normalisierung
@@ -143,7 +141,6 @@ class SearchService:
                 self.repo.save_car(car)
                 new_found += 1
             else:
-                # Bestehende Felder & Preishistorie aktualisieren
                 car.id = existing.id
                 car.first_seen = existing.first_seen
                 car.last_seen = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -181,6 +178,27 @@ class SearchService:
         )
         self.repo.log_search_run(log)
 
+    def rescore_all_listings(self) -> int:
+        """
+        Lädt die aktuelle config.json und bewertet alle aktiven Fahrzeuge in der
+        SQLite-Datenbank neu, ohne externe Scraper oder APIs aufzurufen.
+        """
+        config = self.load_config()
+        all_active_cars = self.repo.get_all_cars(only_active=True, canonical_only=False)
+
+        if not all_active_cars:
+            logger.info("Keine aktiven Fahrzeuge zum Neubewerten vorhanden.")
+            return 0
+
+        median_price, mean_price = self._calculate_market_metrics(all_active_cars)
+
+        for car in all_active_cars:
+            self._score_car(car, median_price, mean_price, config)
+            self.repo.save_car(car)
+
+        logger.info(f"{len(all_active_cars)} Fahrzeuge mit neuen Kriterien erfolgreich neu bewertet.")
+        return len(all_active_cars)
+
     def _filter_listings(self, listings: List[CarListing], config: Dict[str, Any]) -> List[CarListing]:
         filters = config.get("search_criteria", {}).get("filters", {})
         max_price = filters.get("max_price", 27000)
@@ -206,15 +224,15 @@ class SearchService:
             if not (min_power <= car.power_hp <= max_power):
                 continue
 
-            # 2. Reiner Benziner (keine Hybride)
+            # 2. Reiner Benziner (keine Hybride mit Regex-Wortgrenzen)
             full_text = f"{car.title} {car.fuel_type} {' '.join(car.features)}".lower()
-            if exclude_hybrids and any(hk in full_text for hk in hybrid_keywords):
+            if exclude_hybrids and any(self._matches_alias(hk, full_text) for hk in hybrid_keywords):
                 continue
             if "benzin" not in car.fuel_type.lower() and "petrol" not in car.fuel_type.lower():
                 continue
 
             # 3. Weiß ausschließen
-            if any(ec in full_text for ec in excluded_colors):
+            if any(self._matches_alias(ec, full_text) for ec in excluded_colors):
                 continue
 
             # 4. Nur Händlerangebote
@@ -242,12 +260,13 @@ class SearchService:
         aliases = rules.get("feature_aliases", {})
         preferred_colors = [c.lower() for c in rules.get("preferred_colors", ["blau", "rot"])]
 
-        # A) Ausstattungs-Score via Synonym-Matching
-        combined_text = f"{car.title.lower()} {' '.join(car.features).lower()}"
+        # A) Ausstattungs-Score via Regex-Wortgrenzen
+        combined_text = f"{car.title} {' '.join(car.features)}".lower()
         matched_features = []
+
         for std_name, syn_list in aliases.items():
-            checks = [std_name.lower()] + [s.lower() for s in syn_list]
-            if any(term in combined_text for term in checks):
+            checks = [std_name] + syn_list
+            if any(self._matches_alias(term, combined_text) for term in checks):
                 matched_features.append(std_name)
 
         car.features = matched_features
@@ -263,9 +282,8 @@ class SearchService:
         score_mileage = max(0.0, min(100.0, 100.0 - (car.mileage / 800.0)))
 
         # D) Spritverbrauchs-Score
-        # Extrahiere Angabe wie '6.5 l/100km' aus Titel oder Standardwert
         cons_match = re.search(r"(\d+[.,]\d+)\s*(l|liter)", combined_text)
-        cons_val = float(cons_match.group(1).replace(",", ".")) if cons_match else 6.6
+        cons_val = float(cons_match.group(1).replace(",", ".")) if cons_match else rules.get("target_consumption_l100km", 6.2)
         score_consumption = max(0.0, min(100.0, 100.0 - ((cons_val - 5.5) * 35.0)))
 
         # E) Alters-Score (Baujahr)
@@ -276,7 +294,7 @@ class SearchService:
         score_power = max(0.0, min(100.0, ((car.power_hp - 150) / 50.0) * 100.0))
 
         # G) Farb-Präferenz
-        is_fav_color = any(fc in combined_text for fc in preferred_colors)
+        is_fav_color = any(self._matches_alias(fc, combined_text) for fc in preferred_colors)
         score_color = 100.0 if is_fav_color else 40.0
 
         # H) Distanz-Score
@@ -288,9 +306,9 @@ class SearchService:
             score_market * weights.get("market_price", 0.22) +
             score_mileage * weights.get("mileage", 0.15) +
             score_consumption * weights.get("consumption", 0.10) +
+            score_distance * weights.get("distance", 0.10) +
             score_age * weights.get("age", 0.08) +
             score_power * weights.get("power", 0.07) +
-            score_distance * weights.get("distance", 0.10) +
             score_color * weights.get("color_preference", 0.05)
         )
 
@@ -300,13 +318,13 @@ class SearchService:
             "market_price": round(score_market, 1),
             "mileage": round(score_mileage, 1),
             "consumption": round(score_consumption, 1),
+            "distance": round(score_distance, 1),
             "age": round(score_age, 1),
             "power": round(score_power, 1),
-            "distance": round(score_distance, 1),
             "color_preference": round(score_color, 1)
         }
 
-        # Markt-Statistiken für Detailseite & PDF
+        # Markt-Statistiken aufbereiten
         summary_text = (
             f"Liegt {abs(int(diff_median)):,} € unter dem Median ({abs(diff_pct)}% Ersparnis)"
             if diff_median < 0 else
@@ -332,6 +350,8 @@ class SearchService:
             pros.append("Matrix LED / Adaptives Licht vorhanden")
         if "Massagesitz / ErgoActive" in matched_features:
             pros.append("Ergonomie-/Massagesitz verbaut")
+        if "ACC / adaptiver Tempomat" in matched_features:
+            pros.append("Abstandstempomat / Travel Assist an Bord")
         if car.mileage < 40000:
             pros.append(f"Geringe Gesamtlaufleistung ({car.mileage:,} km)".replace(",", "."))
         if car.distance_km < 30:
@@ -356,7 +376,6 @@ class SearchService:
             for j in range(i + 1, n):
                 c1, c2 = listings[i], listings[j]
                 if c1.make.lower() == c2.make.lower() and c1.model.lower() == c2.model.lower():
-                    # Gleiche Leistung & Kilometerstand & Postleitzahl
                     same_specs = (
                         c1.power_hp == c2.power_hp and
                         abs(c1.mileage - c2.mileage) <= 50 and

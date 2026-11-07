@@ -220,7 +220,6 @@ async def settings_view(request: Request):
 async def settings_save(
     request: Request,
     edit_mode: str = Form("fields"),
-    # Formularfelder für Wohnort / Umkreis / Budget
     postal_code: str = Form("97271"),
     city: str = Form("Kleinrinderfeld"),
     radius_km: int = Form(100),
@@ -231,23 +230,27 @@ async def settings_save(
     max_power_hp: int = Form(200),
     exclude_hybrids: bool = Form(False),
     exclude_white: bool = Form(False),
+    target_consumption: float = Form(6.2),
+    inactivity_runs: int = Form(3),
     weight_market: float = Form(22.0),
     weight_features: float = Form(23.0),
     weight_consumption: float = Form(10.0),
     weight_color: float = Form(5.0),
     weight_mileage: float = Form(15.0),
+    weight_distance: float = Form(10.0),
+    weight_age: float = Form(8.0),
+    weight_power: float = Form(7.0),
     model_make: List[str] = Form(default=[]),
     model_name: List[str] = Form(default=[]),
-    features_json: str = Form("[]"),
+    feature_aliases_json: str = Form("{}"),
+    preferred_colors_json: str = Form("[]"),
     run_search_after: bool = Form(False),
     raw_json: str = Form("")
 ):
     try:
         if edit_mode == "raw":
-            # 1. Direkte JSON-Bearbeitung validieren und übernehmen
             parsed_data = json.loads(raw_json)
         else:
-            # 2. Formular-Felder mit bestehender config mergen
             parsed_data = {}
             if CONFIG_PATH.exists():
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -257,56 +260,67 @@ async def settings_save(
             loc = crit.setdefault("location", {})
             flt = crit.setdefault("filters", {})
             weights = parsed_data.setdefault("scoring_weights", {})
-            scoring_rules = parsed_data.setdefault("scoring_rules", {})
+            rules = parsed_data.setdefault("scoring_rules", {})
 
-            # Standort & Umkreis
+            # 1. Standort & Umkreis
             loc["postal_code"] = postal_code.strip()
             loc["city"] = city.strip()
             loc["radius_km"] = radius_km
 
-            # Filter
+            # 2. Filter & Ausschlüsse
             flt["max_price"] = max_price
             flt["max_mileage"] = max_mileage
             flt["min_year"] = min_year
             flt["min_power_hp"] = min_power_hp
             flt["max_power_hp"] = max_power_hp
             flt["exclude_hybrids"] = exclude_hybrids
-            
-            if exclude_white:
-                flt["exclude_colors"] = ["weiß", "weiss", "white", "oryxweiß", "alpinweiß", "pure white"]
-            else:
-                flt["exclude_colors"] = []
+            flt["exclude_colors"] = ["weiß", "weiss", "white", "oryxweiß", "alpinweiß", "pure white"] if exclude_white else []
 
-            # Dynamische Modelle
+            # 3. Modelle
             updated_models = []
             for make_val, model_val in zip(model_make, model_name):
-                make_clean = make_val.strip()
-                model_clean = model_val.strip()
-                if make_clean and model_clean:
-                    updated_models.append({"make": make_clean, "model": model_clean})
+                m_c, n_c = make_val.strip(), model_val.strip()
+                if m_c and n_c:
+                    updated_models.append({"make": m_c, "model": n_c})
             if updated_models:
                 crit["models"] = updated_models
 
-            # Ausstattungs-Tags
+            # 4. Ausstattungs-Aliase (ACC, Matrix LED etc.)
             try:
-                parsed_features = json.loads(features_json)
-                if isinstance(parsed_features, list):
-                    scoring_rules["desired_features"] = [f.strip() for f in parsed_features if f.strip()]
+                parsed_aliases = json.loads(feature_aliases_json)
+                if isinstance(parsed_aliases, dict) and parsed_aliases:
+                    rules["feature_aliases"] = parsed_aliases
             except Exception:
                 pass
 
-            # Scoring-Gewichte
+            # 5. Wunschfarben & Verbrauch
+            try:
+                parsed_colors = json.loads(preferred_colors_json)
+                if isinstance(parsed_colors, list) and parsed_colors:
+                    rules["preferred_colors"] = [c.strip().lower() for c in parsed_colors if c.strip()]
+            except Exception:
+                pass
+
+            rules["target_consumption_l100km"] = target_consumption
+            rules["inactivity_threshold_runs"] = inactivity_runs
+
+            # 6. Gewichte
             weights["market_price"] = weight_market / 100.0
             weights["features"] = weight_features / 100.0
             weights["consumption"] = weight_consumption / 100.0
             weights["color_preference"] = weight_color / 100.0
             weights["mileage"] = weight_mileage / 100.0
+            weights["distance"] = weight_distance / 100.0
+            weights["age"] = weight_age / 100.0
+            weights["power"] = weight_power / 100.0
 
-        # In config.json speichern
+        # In config.json schreiben
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(parsed_data, f, indent=2, ensure_ascii=False)
 
-        # Optional: Sofortigen Suchlauf anstoßen
+        # Alle bestehenden Datensätze mit den neuen Kriterien offline neu bewerten
+        search_service.rescore_all_listings()
+
         if run_search_after:
             search_service.run_search_pipeline()
             return RedirectResponse(url="/?saved=true", status_code=303)
@@ -314,10 +328,8 @@ async def settings_save(
         return RedirectResponse(url="/settings?saved=true", status_code=303)
 
     except json.JSONDecodeError as err:
-        logger.error(f"JSONDecodeError beim Speichern der Konfiguration: {err}")
         return RedirectResponse(url=f"/settings?error=Ungueltiges+JSON:+{err.msg}", status_code=303)
     except Exception as e:
-        logger.error(f"Fehler beim Speichern der Konfiguration: {e}", exc_info=True)
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
 
 
