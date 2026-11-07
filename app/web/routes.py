@@ -242,6 +242,7 @@ async def settings_save(
     weight_power: float = Form(7.0),
     model_make: List[str] = Form(default=[]),
     model_name: List[str] = Form(default=[]),
+    desired_features_json: str = Form("[]"),
     feature_aliases_json: str = Form("{}"),
     preferred_colors_json: str = Form("[]"),
     run_search_after: bool = Form(False),
@@ -285,18 +286,26 @@ async def settings_save(
             if updated_models:
                 crit["models"] = updated_models
 
-            # 4. Ausstattungs-Aliase (ACC, Matrix LED etc.)
+            # 4. desired_features
+            try:
+                parsed_desired = json.loads(desired_features_json)
+                if isinstance(parsed_desired, list):
+                    rules["desired_features"] = [f.strip() for f in parsed_desired if f.strip()]
+            except Exception:
+                pass
+
+            # 5. feature_aliases (Synonyme für ACC, Matrix etc.)
             try:
                 parsed_aliases = json.loads(feature_aliases_json)
-                if isinstance(parsed_aliases, dict) and parsed_aliases:
+                if isinstance(parsed_aliases, dict):
                     rules["feature_aliases"] = parsed_aliases
             except Exception:
                 pass
 
-            # 5. Wunschfarben & Verbrauch
+            # 6. Wunschfarben & Verbrauch
             try:
                 parsed_colors = json.loads(preferred_colors_json)
-                if isinstance(parsed_colors, list) and parsed_colors:
+                if isinstance(parsed_colors, list):
                     rules["preferred_colors"] = [c.strip().lower() for c in parsed_colors if c.strip()]
             except Exception:
                 pass
@@ -304,7 +313,7 @@ async def settings_save(
             rules["target_consumption_l100km"] = target_consumption
             rules["inactivity_threshold_runs"] = inactivity_runs
 
-            # 6. Gewichte
+            # 7. Gewichte
             weights["market_price"] = weight_market / 100.0
             weights["features"] = weight_features / 100.0
             weights["consumption"] = weight_consumption / 100.0
@@ -318,7 +327,7 @@ async def settings_save(
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(parsed_data, f, indent=2, ensure_ascii=False)
 
-        # Alle bestehenden Datensätze mit den neuen Kriterien offline neu bewerten
+        # Alle gespeicherten Autos sofort mit den neuen Kriterien offline neu bewerten
         search_service.rescore_all_listings()
 
         if run_search_after:
@@ -328,8 +337,10 @@ async def settings_save(
         return RedirectResponse(url="/settings?saved=true", status_code=303)
 
     except json.JSONDecodeError as err:
+        logger.error(f"JSONDecodeError beim Speichern der Konfiguration: {err}")
         return RedirectResponse(url=f"/settings?error=Ungueltiges+JSON:+{err.msg}", status_code=303)
     except Exception as e:
+        logger.error(f"Fehler beim Speichern der Konfiguration: {e}", exc_info=True)
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
 
 
@@ -420,13 +431,15 @@ async def toggle_favorite(car_id: int):
     new_status = repo.toggle_favorite(car_id)
     return {"success": True, "is_favorite": new_status}
 
+
 @router.post("/api/search-now")
 async def trigger_search():
     search_service.run_search_pipeline()
     return RedirectResponse(url="/", status_code=303)
 
+
 @router.post("/api/rescore")
 async def trigger_rescore():
     count = search_service.rescore_all_listings()
-    logger.info(f"Manuelles Re-Scoring über Webinterface abgeschlossen ({count} Autos aktualisiert).")
-    return RedirectResponse(url="/?rescored=true", status_code=303)
+    logger.info(f"Re-Scoring über Webinterface abgeschlossen ({count} Autos aktualisiert).")
+    return RedirectResponse(url="/settings?saved=true", status_code=303)
