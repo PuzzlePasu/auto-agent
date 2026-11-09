@@ -23,10 +23,10 @@ class DatabaseRepository:
         return conn
 
     def _init_db(self):
-        """Erstellt alle benötigten Tabellen und Indizes, falls nicht vorhanden."""
+        """Erstellt alle Tabellen und führt automatische Spalten-Migrationen durch."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Haupttabelle für Fahrzeuge
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cars (
@@ -68,7 +68,7 @@ class DatabaseRepository:
                 )
             """)
 
-            # System-Logs für das Web-Dashboard
+            # System-Logs
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS system_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +78,16 @@ class DatabaseRepository:
                 )
             """)
 
-            # Indizes für schnelle Filterung im Dashboard
+            # Automatische Migration für bestehende Datenbanken
+            cursor.execute("PRAGMA table_info(cars)")
+            cols = {row["name"] for row in cursor.fetchall()}
+
+            if "features_json" not in cols:
+                cursor.execute("ALTER TABLE cars ADD COLUMN features_json TEXT")
+            if "missing_runs" not in cols:
+                cursor.execute("ALTER TABLE cars ADD COLUMN missing_runs INTEGER DEFAULT 0")
+
+            # Indizes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_external_id ON cars(external_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_is_active ON cars(is_active)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_deal_score ON cars(deal_score)")
