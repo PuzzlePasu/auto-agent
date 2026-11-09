@@ -10,18 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_mobile_url(url: str) -> str:
-    """
-    Bereinigt und normalisiert mobile.de-Such-URLs für den Apify-Actor:
-    - Schreibt m.mobile.de auf suchen.mobile.de um
-    - Entfernt flüchtige Tracking- und Session-Parameter (ref, refId, ssid), die den Parser stören
-    - Normalisiert Erstzulassungsparameter (z. B. '1-2024' -> '2024:')
-    - Behebt Encoding-Probleme bei Ortsnamen/Umlauten im gn-Parameter
-    """
+    """Bereinigt mobile.de-Such-URLs für den Apify-Actor."""
     clean_url = url.strip()
     if not clean_url:
         return ""
 
-    # 1. Hostname vereinheitlichen
     clean_url = clean_url.replace("https://m.mobile.de/", "https://suchen.mobile.de/")
     clean_url = clean_url.replace("http://m.mobile.de/", "https://suchen.mobile.de/")
     clean_url = clean_url.replace("https://mobile.de/", "https://suchen.mobile.de/")
@@ -31,12 +24,10 @@ def sanitize_mobile_url(url: str) -> str:
         parsed = urlparse(clean_url)
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
-        # 2. Tracking- & Session-Keys entfernen, die Parser-Fehler im Actor verursachen
         volatile_keys = ["ref", "refId", "ssid", "searchId", "sorting.direction"]
         for k in volatile_keys:
             qs.pop(k, None)
 
-        # 3. Erstzulassung formatieren: aus '1-2024' wird '2024:'
         if "fr" in qs:
             normalized_fr = []
             for val in qs["fr"]:
@@ -46,7 +37,6 @@ def sanitize_mobile_url(url: str) -> str:
                 normalized_fr.append(cleaned_val)
             qs["fr"] = normalized_fr
 
-        # 4. Falls gn (Ortsname mit Umlauten/Komma) vorhanden ist, PLZ in zip auslagern
         if "gn" in qs:
             gn_val = qs.pop("gn", [""])[0]
             plz_match = re.search(r"\b(\d{5})\b", gn_val)
@@ -68,13 +58,26 @@ class ApifyProvider:
         self.actor_id = os.getenv("APIFY_ACTOR_ID")
         self.client = ApifyClient(self.token) if self.token else None
 
+    def _extract_float(self, val: Any, default: float = 0.0) -> float:
+        """Extrahiert robust Zahlenwerte aus verschachtelten Dicts, Strings und Zahlen."""
+        if val is None:
+            return default
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, dict):
+            for key in ["amount", "gross", "value", "price", "net", "total"]:
+                if key in val:
+                    return self._extract_float(val[key], default)
+            return default
+        if isinstance(val, str):
+            cleaned = re.sub(r"[^\d.,]", "", val).replace(".", "").replace(",", ".")
+            try:
+                return float(cleaned) if cleaned else default
+            except ValueError:
+                return default
+        return default
+
     def get_search_urls(self, config: Dict[str, Any]) -> List[str]:
-        """
-        Ermittelt die aktiven Such-URLs:
-        1. Priorität: Unraid Docker-Umgebungsvariable MOBILE_SEARCH_URLS
-        2. Priorität: Fallback auf config.json (search_criteria.search_page_urls)
-        Alle URLs werden durch sanitize_mobile_url normalisiert.
-        """
         raw_urls = []
         env_urls = os.getenv("MOBILE_SEARCH_URLS", "").strip()
 
@@ -85,7 +88,7 @@ class ApifyProvider:
                 if u.strip().startswith("http")
             ]
             if raw_urls:
-                logger.info(f"ApifyProvider: {len(raw_urls)} URL(s) aus Docker-ENV (MOBILE_SEARCH_URLS) geladen.")
+                logger.info(f"ApifyProvider: {len(raw_urls)} URL(s) aus Docker-ENV geladen.")
 
         if not raw_urls:
             raw_urls = config.get("search_criteria", {}).get("search_page_urls", [])
@@ -93,18 +96,15 @@ class ApifyProvider:
                 logger.info(f"ApifyProvider: {len(raw_urls)} URL(s) aus config.json geladen.")
 
         if not raw_urls:
-            logger.warning("ApifyProvider: Keine mobile.de Such-URLs gefunden (weder in ENV noch in config.json).")
+            logger.warning("ApifyProvider: Keine mobile.de Such-URLs gefunden.")
             return []
 
-        # Jede URL durch den Normalisierer schicken
-        sanitized_urls = []
+        sanitized = []
         for u in raw_urls:
             clean = sanitize_mobile_url(u)
             if clean:
-                sanitized_urls.append(clean)
-                logger.debug(f"Bereinigte mobile.de URL: {clean}")
-
-        return sanitized_urls
+                sanitized.append(clean)
+        return sanitized
 
     def search(self, config: Dict[str, Any]) -> List[CarListing]:
         if not self.client or not self.actor_id:
@@ -116,32 +116,29 @@ class ApifyProvider:
             logger.error("Abbruch: Keine gültigen searchPageURLs für den Apify-Actor vorhanden.")
             return []
 
-        # Exakter Payload für den mobile.de Actor
         run_input = {
             "automaticPaging": True,
             "searchCategory": "Car",
             "searchPageURLs": urls
         }
 
-        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} bereinigten Such-URL(s)...")
+        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} URL(s)...")
 
         try:
             run = self.client.actor(self.actor_id).call(run_input=run_input)
 
-            # Unterstützt sowohl neuere Pydantic-Objekte ('Run') als auch Dict-Antworten
             dataset_id = getattr(run, "default_dataset_id", None) or getattr(run, "defaultDatasetId", None)
             if not dataset_id and isinstance(run, dict):
                 dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
 
             if not dataset_id:
-                logger.error(f"Apify Actor lieferte keine defaultDatasetId zurück. Typ von run: {type(run)}")
+                logger.error("Apify Actor lieferte keine defaultDatasetId zurück.")
                 return []
 
             dataset_client = self.client.dataset(dataset_id)
             listings: List[CarListing] = []
 
             for raw_item in dataset_client.iterate_items():
-                # Sichere Konvertierung in Dict, falls Items Pydantic-Modelle sind
                 if hasattr(raw_item, "model_dump"):
                     item = raw_item.model_dump()
                 elif hasattr(raw_item, "dict"):
@@ -163,30 +160,28 @@ class ApifyProvider:
             return []
 
     def _map_to_car_listing(self, item: Dict[str, Any]) -> Optional[CarListing]:
-        """Mappt das vom Apify-Actor gelieferte Inserats-JSON auf das CarListing-Datenmodell."""
         try:
             ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
             title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
 
-            # 1. Preis robust parsen (auch wenn 'price' ein Dict wie {"amount": 24900, "currency": "EUR"} ist)
+            # Preis parsen
             raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
             price = self._extract_float(raw_price, default=0.0)
 
-            # Mindest-Plausibilität: Inserate ohne Preis verwerfen
             if price <= 500:
                 return None
 
-            # 2. Kilometerstand robust parsen
+            # Kilometerstand
             raw_mileage = item.get("mileage") or item.get("mileageInKm") or item.get("kilometers") or 0
             if isinstance(raw_mileage, dict):
                 raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
             if isinstance(raw_mileage, str):
-                cleaned_mileage = re.sub(r"[^\d]", "", raw_mileage)
-                mileage = int(cleaned_mileage) if cleaned_mileage else 0
+                cleaned_m = re.sub(r"[^\d]", "", raw_mileage)
+                mileage = int(cleaned_m) if cleaned_m else 0
             else:
                 mileage = int(raw_mileage or 0)
 
-            # 3. Erstzulassung robust parsen
+            # Erstzulassung
             raw_year = item.get("firstRegistration") or item.get("year") or 2020
             if isinstance(raw_year, dict):
                 raw_year = raw_year.get("year") or raw_year.get("value") or 2020
@@ -196,7 +191,7 @@ class ApifyProvider:
             else:
                 year = int(raw_year or 2020)
 
-            # 4. Leistung in PS
+            # Leistung (PS)
             raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
             if isinstance(raw_power, dict):
                 raw_power = raw_power.get("hp") or raw_power.get("powerHp") or raw_power.get("value") or 150
@@ -210,11 +205,11 @@ class ApifyProvider:
             else:
                 power_hp = int(raw_power or 150)
 
-            # 5. Distanz robust parsen (auch wenn 'distance' ein Dict ist)
+            # Distanz
             raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
             distance_km = self._extract_float(raw_dist, default=25.0)
 
-            # 6. Ausstattungsmerkmale extrahieren
+            # Ausstattungen
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
             if isinstance(raw_features, str):
                 features = [f.strip() for f in raw_features.split(",") if f.strip()]
@@ -223,7 +218,6 @@ class ApifyProvider:
             else:
                 features = []
 
-            # 7. Hersteller und Modell ableiten
             make = item.get("make")
             model = item.get("model")
             if not make:
