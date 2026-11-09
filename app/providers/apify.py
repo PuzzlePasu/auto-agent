@@ -168,36 +168,38 @@ class ApifyProvider:
             ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
             title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
 
-            # Preis parsen
+            # 1. Preis robust parsen (auch wenn 'price' ein Dict wie {"amount": 24900, "currency": "EUR"} ist)
             raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
-            if isinstance(raw_price, str):
-                cleaned_price = re.sub(r"[^\d.,]", "", raw_price).replace(".", "").replace(",", ".")
-                price = float(cleaned_price) if cleaned_price else 0.0
-            else:
-                price = float(raw_price)
+            price = self._extract_float(raw_price, default=0.0)
 
             # Mindest-Plausibilität: Inserate ohne Preis verwerfen
             if price <= 500:
                 return None
 
-            # Kilometerstand
+            # 2. Kilometerstand robust parsen
             raw_mileage = item.get("mileage") or item.get("mileageInKm") or item.get("kilometers") or 0
+            if isinstance(raw_mileage, dict):
+                raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
             if isinstance(raw_mileage, str):
                 cleaned_mileage = re.sub(r"[^\d]", "", raw_mileage)
                 mileage = int(cleaned_mileage) if cleaned_mileage else 0
             else:
-                mileage = int(raw_mileage)
+                mileage = int(raw_mileage or 0)
 
-            # Erstzulassung
+            # 3. Erstzulassung robust parsen
             raw_year = item.get("firstRegistration") or item.get("year") or 2020
+            if isinstance(raw_year, dict):
+                raw_year = raw_year.get("year") or raw_year.get("value") or 2020
             if isinstance(raw_year, str):
                 year_match = re.search(r"\b(19\d\d|20\d\d)\b", raw_year)
                 year = int(year_match.group(1)) if year_match else 2020
             else:
-                year = int(raw_year)
+                year = int(raw_year or 2020)
 
-            # Leistung in PS
+            # 4. Leistung in PS
             raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
+            if isinstance(raw_power, dict):
+                raw_power = raw_power.get("hp") or raw_power.get("powerHp") or raw_power.get("value") or 150
             if isinstance(raw_power, str):
                 ps_match = re.search(r"(\d+)\s*ps", raw_power, re.IGNORECASE)
                 if ps_match:
@@ -206,9 +208,13 @@ class ApifyProvider:
                     digits = re.findall(r"\d+", raw_power)
                     power_hp = int(digits[0]) if digits else 150
             else:
-                power_hp = int(raw_power)
+                power_hp = int(raw_power or 150)
 
-            # Ausstattungsmerkmale extrahieren
+            # 5. Distanz robust parsen (auch wenn 'distance' ein Dict ist)
+            raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
+            distance_km = self._extract_float(raw_dist, default=25.0)
+
+            # 6. Ausstattungsmerkmale extrahieren
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
             if isinstance(raw_features, str):
                 features = [f.strip() for f in raw_features.split(",") if f.strip()]
@@ -217,7 +223,7 @@ class ApifyProvider:
             else:
                 features = []
 
-            # Hersteller und Modell ableiten
+            # 7. Hersteller und Modell ableiten
             make = item.get("make")
             model = item.get("model")
             if not make:
@@ -246,7 +252,7 @@ class ApifyProvider:
                 dealer_name=str(item.get("dealerName") or item.get("seller") or "Händler"),
                 postal_code=str(item.get("postalCode") or item.get("zip") or "97271"),
                 city=str(item.get("city") or item.get("location") or "Würzburg"),
-                distance_km=float(item.get("distance") or item.get("distanceInKm") or 25.0),
+                distance_km=distance_km,
                 features=features,
                 deal_score=0.0
             )
