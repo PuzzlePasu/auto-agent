@@ -1,339 +1,312 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="max-w-6xl mx-auto space-y-6">
 
-  <!-- Breadcrumbs & Aktionen -->
-  <div class="flex items-center justify-between">
-    <a href="/" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition">
-      <i class="fa-solid fa-arrow-left"></i> Zurück zum Dashboard
-    </a>
-    <div class="flex items-center gap-3">
-      <!-- PDF-Export Button -->
-      <a href="/car/{{ car.id }}/pdf" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition flex items-center gap-2 border border-slate-700 shadow-sm">
-        <i class="fa-solid fa-file-pdf text-rose-500"></i>
-        <span>PDF-Report</span>
+  <!-- Breadcrumb & Top Bar -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-2 text-xs text-slate-400">
+      <a href="/" class="hover:text-blue-400 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Dashboard</span>
       </a>
+      <span class="text-slate-600">/</span>
+      <span class="text-slate-300 font-medium">{{ car.make }} {{ car.model }}</span>
+    </div>
 
-      <!-- Favoriten-Toggle -->
-      <button onclick="toggleFavorite({{ car.id }}, this)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-2 border border-slate-700">
-        <i class="fa-{% if car.is_favorite %}solid text-rose-500{% else %}regular text-slate-400{% endif %} fa-heart"></i>
-        <span>Favorit</span>
-      </button>
-
-      <!-- Original-Inserat -->
-      <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-lg shadow-blue-600/30 transition flex items-center gap-2">
-        <i class="fa-solid fa-arrow-up-right-from-square"></i>
-        <span>Original-Inserat auf {{ car.provider }}</span>
+    <div class="flex items-center gap-2">
+      <a href="/car/{{ car.id }}/pdf" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-file-pdf text-rose-400"></i>
+        <span>PDF-Export</span>
+      </a>
+      <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition flex items-center gap-1.5 shadow-md shadow-blue-600/30">
+        <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+        <span>Auf mobile.de öffnen</span>
       </a>
     </div>
   </div>
 
-  <!-- Durchklickbare Fotogalerie -->
-  {% set gallery = car.images if (car.images and car.images|length > 0) else ([car.image_url] if car.image_url else []) %}
-  <div class="glass-card rounded-2xl p-4 border border-slate-800">
-    {% if gallery %}
-    <div class="relative w-full h-[320px] sm:h-[460px] rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-800 group">
-      <!-- Hauptbild -->
-      <img id="mainGalleryImg" src="{{ gallery[0] }}" alt="{{ car.title }}" class="w-full h-full object-cover transition-opacity duration-200">
+  <!-- Haupt-Header Card -->
+  <div class="glass-card rounded-2xl p-6 border border-slate-800 relative overflow-hidden">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
       
-      <!-- Anbieter-Badge & Zähler -->
-      <span class="absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-slate-900/90 text-slate-300 border border-slate-700 shadow">
-        {{ car.provider }}
-      </span>
-      
-      <span id="galleryCounter" class="absolute bottom-3 right-3 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-950/80 text-slate-300 border border-slate-800 backdrop-blur">
-        1 / {{ gallery|length }}
-      </span>
+      <!-- Fahrzeugdaten Titel & Tags -->
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide uppercase">
+            {{ car.provider }}
+          </span>
+          {% if car.is_favorite %}
+          <span class="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-1">
+            <i class="fa-solid fa-star text-[10px]"></i> Favorit
+          </span>
+          {% endif %}
+          {% if car.is_active %}
+          <span class="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-[10px]"></i> Aktiv
+          </span>
+          {% else %}
+          <span class="px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[11px] font-bold flex items-center gap-1">
+            <i class="fa-solid fa-circle-xmark text-[10px]"></i> Inaktiv
+          </span>
+          {% endif %}
+          <span class="text-xs text-slate-400 flex items-center gap-1 ml-1">
+            <i class="fa-regular fa-clock"></i> Seit {{ days_online|default(1) }} Tag(en) getrackt
+          </span>
+        </div>
 
-      {% if gallery|length > 1 %}
-      <!-- Navigation Pfeile -->
-      <button onclick="changeSlide(-1)" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white flex items-center justify-center backdrop-blur border border-slate-700 transition opacity-0 group-hover:opacity-100 shadow-lg" title="Vorheriges Foto (Pfeiltaste Links)">
-        <i class="fa-solid fa-chevron-left"></i>
-      </button>
-      <button onclick="changeSlide(1)" class="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white flex items-center justify-center backdrop-blur border border-slate-700 transition opacity-0 group-hover:opacity-100 shadow-lg" title="Nächstes Foto (Pfeiltaste Rechts)">
-        <i class="fa-solid fa-chevron-right"></i>
-      </button>
-      {% endif %}
-    </div>
+        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          {{ car.title }}
+        </h1>
 
-    {% if gallery|length > 1 %}
-    <!-- Thumbnail-Leiste -->
-    <div class="flex items-center gap-2.5 mt-3 overflow-x-auto pb-2 scrollbar-thin">
-      {% for img_url in gallery %}
-      <button onclick="setSlide({{ loop.index0 }})" class="thumb-btn flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 {% if loop.first %}border-blue-500 scale-105{% else %}border-transparent opacity-60 hover:opacity-100{% endif %} transition duration-150">
-        <img src="{{ img_url }}" class="w-full h-full object-cover" alt="Vorschau {{ loop.index }}">
-      </button>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% else %}
-    <div class="w-full h-48 rounded-xl bg-slate-900 flex items-center justify-center text-slate-500 text-xs italic">
-      Keine Fahrzeugfotos verfügbar.
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- Kopfbereich mit Stammdaten & Deal-Score -->
-  <div class="glass-card rounded-2xl p-6 border border-slate-800 flex flex-col md:flex-row gap-6 items-start justify-between">
-    <div>
-      <div class="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">
-        <span>{{ car.make }}</span>
-        <span>&bull;</span>
-        <span>{{ car.model }}</span>
-        <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-normal">{{ car.provider }}</span>
+        <p class="text-xs text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span><i class="fa-solid fa-building text-slate-500 mr-1"></i>{{ car.dealer_name|default('Händler') }}</span>
+          <span><i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>{{ car.postal_code|default('97271') }} {{ car.city|default('Würzburg') }} (ca. {{ car.distance_km|round(1)|default(25.0) }} km)</span>
+          <span><i class="fa-solid fa-fingerprint text-slate-500 mr-1"></i>ID: {{ car.external_id }}</span>
+        </p>
       </div>
-      <h1 class="text-2xl font-black text-white leading-tight mb-2">{{ car.title }}</h1>
-      <p class="text-xs text-slate-400">
-        Standort: <strong class="text-slate-200">{{ car.postal_code }} {{ car.city }}</strong> (ca. {{ car.distance_km|round(1) }} km von 97271 Kleinrinderfeld) &bull; Händler: <span class="text-slate-300">{{ car.dealer_name or 'Autohaus' }}</span>
-      </p>
-    </div>
 
-    <div class="flex items-center gap-6 bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex-shrink-0">
-      <div class="text-right">
-        <div class="text-3xl font-black text-white">{{ "{:,.0f}".format(car.price).replace(",", ".") }} €</div>
-        {% if car.duplicate_info %}
-        <div class="text-xs text-blue-400 font-semibold">{{ car.duplicate_info.message }}</div>
-        {% endif %}
-      </div>
-      <div class="h-12 w-px bg-slate-800"></div>
-      <div class="text-center">
-        <div class="text-[10px] uppercase font-bold text-slate-400">Gesamt-Score</div>
-        <div class="text-3xl font-black {% if car.deal_score >= 88 %}text-emerald-400{% elif car.deal_score >= 75 %}text-blue-400{% else %}text-amber-400{% endif %}">
-          {{ car.deal_score }} <span class="text-sm font-normal text-slate-500">/ 100</span>
+      <!-- Preis & Deal Score Widget -->
+      <div class="flex items-center gap-4 self-start lg:self-auto">
+        <div class="text-right">
+          <div class="text-3xl font-black text-white">
+            {{ "{:,.0f}".format(car.price|default(0)).replace(",", ".") }} €
+          </div>
+          {% if price_metrics and price_metrics.has_dropped %}
+          <div class="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1 mt-0.5">
+            <i class="fa-solid fa-arrow-trend-down"></i>
+            <span>-{{ "{:,.0f}".format(price_metrics.price_drop_amount|default(0)).replace(",", ".") }} € (-{{ price_metrics.price_drop_percent|default(0) }}%)</span>
+          </div>
+          {% else %}
+          <div class="text-[11px] text-slate-500 mt-0.5">Startpreis stabil</div>
+          {% endif %}
+        </div>
+
+        <!-- Deal Score Badge -->
+        <div class="w-16 h-16 rounded-2xl flex flex-col items-center justify-center border font-black shadow-lg
+          {% if car.deal_score >= 80 %}
+            bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10
+          {% elif car.deal_score >= 65 %}
+            bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-blue-500/10
+          {% elif car.deal_score >= 50 %}
+            bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-amber-500/10
+          {% else %}
+            bg-slate-800 border-slate-700 text-slate-400
+          {% endif %}">
+          <span class="text-xl leading-none">{{ car.deal_score|round|int }}</span>
+          <span class="text-[9px] font-bold uppercase tracking-wider opacity-80 mt-0.5">Score</span>
         </div>
       </div>
+
     </div>
   </div>
 
+  <!-- Key Specs Grid -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Laufleistung</span>
+      <div class="text-sm font-bold text-white">{{ "{:,.0f}".format(car.mileage|default(0)).replace(",", ".") }} km</div>
+    </div>
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Erstzulassung</span>
+      <div class="text-sm font-bold text-white">{{ car.first_registration_year|default('N/A') }}</div>
+    </div>
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Leistung</span>
+      <div class="text-sm font-bold text-white">{{ car.power_hp|default('N/A') }} PS</div>
+    </div>
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Kraftstoff</span>
+      <div class="text-sm font-bold text-white">{{ car.fuel_type|default('Benzin') }}</div>
+    </div>
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Getriebe</span>
+      <div class="text-sm font-bold text-white">{{ car.transmission|default('Automatik') }}</div>
+    </div>
+    <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-1">
+      <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Entfernung</span>
+      <div class="text-sm font-bold text-white">{{ car.distance_km|round(1)|default('25.0') }} km</div>
+    </div>
+  </div>
+
+  <!-- Zwei-Spalten-Layout: Details & Ausstattungsabgleich -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- Linke 2 Spalten: Teil-Scores, Vor-/Nachteile, Marktvergleich -->
+    <!-- Linke Spalte (2 Spalten): Preishistorie & Features -->
     <div class="lg:col-span-2 space-y-6">
 
-      <!-- Teil-Scores Matrix (8 Kriterien) -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-          <i class="fa-solid fa-chart-pie text-blue-400"></i> Nachvollziehbare Deal-Score Aufschlüsselung
-        </h2>
-
-        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- 1. Marktpreis (22%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Marktpreis (22%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('market_price', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-blue-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('market_price', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 2. Ausstattung (23%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Ausstattung (23%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('features', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-indigo-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('features', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 3. Laufleistung (15%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Laufleistung (15%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('mileage', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('mileage', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 4. Spritverbrauch (10%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
-              <span>Verbrauch (10%)</span>
-              <i class="fa-solid fa-gas-pump text-teal-400 text-[11px]"></i>
-            </span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('consumption', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-teal-400 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('consumption', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 5. Baujahr / Alter (8%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Baujahr (8%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('age', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-purple-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('age', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 6. Leistung (7%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Leistung (7%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('power', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-amber-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('power', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 7. Lackierung / Farbe (5%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block flex items-center justify-between">
-              <span>Farbe (5%)</span>
-              <i class="fa-solid fa-palette text-cyan-400 text-[11px]"></i>
-            </span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('color_preference', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-gradient-to-r from-blue-500 to-rose-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('color_preference', 0) }}%"></div>
-            </div>
-          </div>
-
-          <!-- 8. Distanz (5%) -->
-          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-            <span class="text-[10px] uppercase text-slate-400 font-semibold block">Distanz (5%)</span>
-            <div class="text-xl font-bold text-white mt-1">{{ car.sub_scores.get('distance', 0) }} <span class="text-xs font-normal text-slate-500">/ 100</span></div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2">
-              <div class="bg-rose-500 h-1.5 rounded-full" style="width: {{ car.sub_scores.get('distance', 0) }}%"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Vorteile und Nachteile -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="glass-card rounded-2xl p-5 border border-emerald-950/60 bg-emerald-950/10">
-          <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-plus-circle"></i> Vorteile
-          </h3>
-          <ul class="space-y-2 text-xs text-slate-300">
-            {% for pro in car.pros %}
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-400 font-bold">+</span>
-              <span>{{ pro }}</span>
-            </li>
-            {% else %}
-            <li class="text-slate-500 italic">Keine besonderen Pluspunkte ermittelt.</li>
-            {% endfor %}
-          </ul>
-        </div>
-
-        <div class="glass-card rounded-2xl p-5 border border-rose-950/60 bg-rose-950/10">
-          <h3 class="text-sm font-bold text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-minus-circle"></i> Nachteile
-          </h3>
-          <ul class="space-y-2 text-xs text-slate-300">
-            {% for con in car.cons %}
-            <li class="flex items-start gap-2">
-              <span class="text-rose-400 font-bold">-</span>
-              <span>{{ con }}</span>
-            </li>
-            {% else %}
-            <li class="text-slate-500 italic">Keine wesentlichen Nachteile festgestellt.</li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-
-      <!-- Marktvergleich Details -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800">
-        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-          <i class="fa-solid fa-scale-balanced text-indigo-400"></i> Marktpreis-Vergleich (mobile.de &amp; AutoScout24)
-        </h3>
-        
-        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 mb-4">
-          <p class="text-sm font-semibold text-slate-200">
-            {{ car.market_stats.summary }}
+      <!-- Ziel-Ausstattungen Abgleich (Checkliste) -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-amber-400"></i> Abgleich Ziel-Ausstattungen
+          </h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">
+            Gleicht die konfigurierten Merkmale inklusive Synonym-Erkennung mit dem Inserat ab.
           </p>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div>
-            <span class="text-slate-500 block">Vergleichsfahrzeuge</span>
-            <span class="font-bold text-white text-base">{{ car.market_stats.peer_count }}</span>
-          </div>
-          <div>
-            <span class="text-slate-500 block">Marktmedian</span>
-            <span class="font-bold text-white text-base">{{ "{:,.0f}".format(car.market_stats.median_price).replace(",", ".") }} €</span>
-          </div>
-          <div>
-            <span class="text-slate-500 block">Durchschnittspreis</span>
-            <span class="font-bold text-white text-base">{{ "{:,.0f}".format(car.market_stats.mean_price).replace(",", ".") }} €</span>
-          </div>
-          <div>
-            <span class="text-slate-500 block">Differenz zum Median</span>
-            <span class="font-bold text-base {% if car.market_stats.diff_to_median < 0 %}text-emerald-400{% else %}text-amber-400{% endif %}">
-              {{ "{:,.0f}".format(car.market_stats.diff_to_median).replace(",", ".") }} € ({{ car.market_stats.diff_percent }}%)
-            </span>
-          </div>
-        </div>
-      </div>
+        {% if desired_features and desired_features|length > 0 %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {% for feat in desired_features %}
+            {% set feat_lower = feat|lower %}
+            {% set matched = false %}
+            
+            {# Direkter Namenscheck in Titel oder Features #}
+            {% if feat_lower in car.title|lower %}
+              {% set matched = true %}
+            {% else %}
+              {% for f in car.features %}
+                {% if feat_lower in f|lower %}
+                  {% set matched = true %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
 
-      <!-- Ausstattungsliste -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800">
-        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-          <i class="fa-solid fa-list-check text-blue-400"></i> Erkannte Ausstattungsmerkmale
-        </h3>
-        <div class="flex flex-wrap gap-2">
-          {% for f in car.features %}
-          <span class="px-3 py-1 bg-slate-800/80 border border-slate-700 rounded-lg text-xs font-medium text-slate-200">
-            <i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> {{ f }}
-          </span>
-          {% else %}
-          <span class="text-slate-500 text-xs italic">Keine Ausstattungsmerkmale hinterlegt.</span>
+            {# Falls feature_aliases übergeben wurden #}
+            {% if not matched and feature_aliases and feat in feature_aliases %}
+              {% for syn in feature_aliases[feat] %}
+                {% if syn|lower in car.title|lower %}
+                  {% set matched = true %}
+                {% else %}
+                  {% for f in car.features %}
+                    {% if syn|lower in f|lower %}
+                      {% set matched = true %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+
+            <div class="flex items-center gap-2.5 p-2.5 rounded-xl border {% if matched %}bg-emerald-950/20 border-emerald-500/30 text-emerald-200{% else %}bg-slate-900/40 border-slate-800 text-slate-500{% endif %}">
+              {% if matched %}
+                <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+                <span class="text-xs font-semibold text-slate-200">{{ feat }}</span>
+              {% else %}
+                <i class="fa-solid fa-circle-xmark text-slate-600 text-xs"></i>
+                <span class="text-xs text-slate-400">{{ feat }}</span>
+              {% endif %}
+            </div>
           {% endfor %}
         </div>
+        {% else %}
+        <p class="text-xs text-slate-500 italic">Keine Ziel-Ausstattungsmerkmale in der Konfiguration definiert.</p>
+        {% endif %}
+      </div>
+
+      <!-- Vollständige Ausstattungsmerkmale (Tags) -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-tags text-blue-400"></i> Alle erkannten Ausstattungsmerkmale ({{ car.features|length }})
+        </h2>
+        {% if car.features and car.features|length > 0 %}
+        <div class="flex flex-wrap gap-1.5 max-h-72 overflow-y-auto scrollbar-thin pr-1">
+          {% for feature in car.features %}
+          <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300">
+            {{ feature }}
+          </span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-slate-500 italic">Keine expliziten Ausstattungsmerkmale im Inserat erfasst.</p>
+        {% endif %}
       </div>
 
     </div>
 
-    <!-- Rechte 1 Spalte: Standzeit & Preishistorie -->
+    <!-- Rechte Spalte: Preishistorie & Marktvergleich -->
     <div class="space-y-6">
 
-      <div class="glass-card rounded-2xl p-6 border border-slate-800">
-        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-          <i class="fa-solid fa-clock-rotate-left text-amber-400"></i> Standzeit &amp; Beobachtung
-        </h3>
+      <!-- Preishistorie Widget -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-timeline text-indigo-400"></i> Preishistorie
+        </h2>
 
-        <div class="space-y-3 text-xs">
-          <div class="flex justify-between py-2 border-b border-slate-800">
-            <span class="text-slate-400">Erstmals entdeckt:</span>
-            <span class="font-semibold text-slate-200">{{ car.first_seen if car.first_seen else 'Neu' }}</span>
+        {% if price_history and price_history|length > 0 %}
+        <div class="space-y-3 relative before:absolute before:inset-0 before:left-2 before:w-0.5 before:bg-slate-800">
+          {% for p in price_history %}
+          <div class="relative flex items-center justify-between pl-6 text-xs">
+            <div class="absolute left-1 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-slate-900"></div>
+            <span class="text-slate-400">{{ p.recorded_at|default('') }}</span>
+            <span class="font-bold text-white">{{ "{:,.0f}".format(p.price|default(0)).replace(",", ".") }} €</span>
           </div>
-          <div class="flex justify-between py-2 border-b border-slate-800">
-            <span class="text-slate-400">Zuletzt aktualisiert:</span>
-            <span class="font-semibold text-slate-200">{{ car.last_seen if car.last_seen else 'Neu' }}</span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-xs text-slate-500 italic">
+          Bisher keine Preisänderungen aufgezeichnet.
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Markt-Statistik Card (Geschützt gegen Undefined) -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-emerald-400"></i> Marktpreis-Einordnung
+        </h2>
+
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center py-1.5 border-b border-slate-800">
+            <span class="text-slate-400">Aktueller Angebotspreis</span>
+            <span class="font-bold text-white">{{ "{:,.0f}".format(car.price|default(0)).replace(",", ".") }} €</span>
           </div>
-          <div class="flex justify-between py-2 border-b border-slate-800">
-            <span class="text-slate-400">Standzeit / Beobachtung:</span>
-            <span class="font-bold text-amber-400">Seit {{ days_online }} Tagen online</span>
+
+          <div class="flex justify-between items-center py-1.5 border-b border-slate-800">
+            <span class="text-slate-400">Markt-Medianpreis</span>
+            <span class="font-bold text-white">
+              {% if car.market_stats and car.market_stats.median_price %}
+                {{ "{:,.0f}".format(car.market_stats.median_price).replace(",", ".") }} €
+              {% else %}
+                <span class="text-slate-500 font-normal">Nicht verfügbar</span>
+              {% endif %}
+            </span>
           </div>
-          <div class="flex justify-between py-2">
-            <span class="text-slate-400">Status:</span>
-            <span class="font-semibold {% if car.is_active %}text-emerald-400{% else %}text-rose-400{% endif %}">
-              {% if car.is_active %}Aktiv am Markt{% else %}Inaktiv / Verschwunden{% endif %}
+
+          <div class="flex justify-between items-center py-1.5 border-b border-slate-800">
+            <span class="text-slate-400">Preisdifferenz zum Median</span>
+            <span>
+              {% if car.market_stats and car.market_stats.difference is defined %}
+                {% if car.market_stats.difference < 0 %}
+                  <span class="text-emerald-400 font-bold">{{ "{:,.0f}".format(car.market_stats.difference).replace(",", ".") }} € (Günstiger)</span>
+                {% elif car.market_stats.difference > 0 %}
+                  <span class="text-rose-400 font-bold">+{{ "{:,.0f}".format(car.market_stats.difference).replace(",", ".") }} € (Teurer)</span>
+                {% else %}
+                  <span class="text-slate-300 font-bold">Im Marktschnitt</span>
+                {% endif %}
+              {% else %}
+                <span class="text-slate-500">N/A</span>
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="flex justify-between items-center py-1.5">
+            <span class="text-slate-400">Vergleichbare Fahrzeuge</span>
+            <span class="font-bold text-slate-300">
+              {% if car.market_stats and car.market_stats.total_comparable is defined %}
+                {{ car.market_stats.total_comparable }}
+              {% else %}
+                -
+              {% endif %}
             </span>
           </div>
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-6 border border-slate-800">
-        <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-          <i class="fa-solid fa-tag text-emerald-400"></i> Preishistorie
-        </h3>
-
-        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs mb-4">
-          <span class="font-semibold text-slate-200">{{ price_metrics.summary }}</span>
-        </div>
-
-        <div class="space-y-2 text-xs">
-          {% for p in price_history %}
-          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
-            <span class="text-slate-400">{{ p.recorded_at[:10] if p.recorded_at else '-' }}</span>
-            <span class="font-bold text-white">{{ "{:,.0f}".format(p.price).replace(",", ".") }} €</span>
-          </div>
-          {% else %}
-          <div class="text-slate-500 text-xs italic">Keine vorherigen Preisänderungen.</div>
-          {% endfor %}
+      <!-- Quick Actions Card -->
+      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-bolt text-amber-400"></i> Aktionen
+        </h2>
+        <div class="space-y-2">
+          <a href="/compare?id1={{ car.id }}" class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-code-compare text-blue-400"></i>
+            <span>Mit anderem Fahrzeug vergleichen</span>
+          </a>
+          <a href="{{ car.url }}" target="_blank" rel="noopener noreferrer" class="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-external-link text-slate-400"></i>
+            <span>Inserat direkt aufrufen</span>
+          </a>
         </div>
       </div>
 
@@ -342,54 +315,4 @@
   </div>
 
 </div>
-
-<!-- JavaScript für interaktive Galerie & Tastatursteuerung -->
-<script>
-  const galleryImages = {{ gallery|tojson if gallery else '[]' }};
-  let currentSlide = 0;
-
-  function updateGalleryUI() {
-    const mainImg = document.getElementById('mainGalleryImg');
-    const counter = document.getElementById('galleryCounter');
-    const thumbs = document.querySelectorAll('.thumb-btn');
-
-    if (!mainImg || galleryImages.length === 0) return;
-
-    mainImg.style.opacity = '0.35';
-    setTimeout(() => {
-      mainImg.src = galleryImages[currentSlide];
-      mainImg.style.opacity = '1';
-    }, 100);
-
-    if (counter) {
-      counter.innerText = `${currentSlide + 1} / ${galleryImages.length}`;
-    }
-
-    thumbs.forEach((thumb, idx) => {
-      if (idx === currentSlide) {
-        thumb.classList.remove('border-transparent', 'opacity-60');
-        thumb.classList.add('border-blue-500', 'scale-105');
-      } else {
-        thumb.classList.remove('border-blue-500', 'scale-105');
-        thumb.classList.add('border-transparent', 'opacity-60');
-      }
-    });
-  }
-
-  function changeSlide(direction) {
-    if (galleryImages.length <= 1) return;
-    currentSlide = (currentSlide + direction + galleryImages.length) % galleryImages.length;
-    updateGalleryUI();
-  }
-
-  function setSlide(index) {
-    currentSlide = index;
-    updateGalleryUI();
-  }
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') changeSlide(-1);
-    if (e.key === 'ArrowRight') changeSlide(1);
-  });
-</script>
 {% endblock %}

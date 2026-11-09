@@ -119,7 +119,14 @@ async def car_details(request: Request, car_id: int):
     first_dt = datetime.strptime(car.first_seen, "%Y-%m-%d %H:%M:%S") if car.first_seen else datetime.utcnow()
     days_online = max(1, (datetime.utcnow() - first_dt).days)
     price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
-
+    
+# Falls car.market_stats nicht existiert oder None ist:
+     if not getattr(car, "market_stats", None):
+            car.market_stats = {
+                "median_price": car.price,
+                "difference": 0.0,
+                "total_comparable": 0
+            }
     desired_features = []
     if CONFIG_PATH.exists():
         try:
