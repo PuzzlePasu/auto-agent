@@ -2,10 +2,62 @@ import os
 import logging
 import re
 from typing import List, Dict, Any, Optional
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from apify_client import ApifyClient
 from app.database.models import CarListing
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_mobile_url(url: str) -> str:
+    """
+    Bereinigt und normalisiert mobile.de-Such-URLs für den Apify-Actor:
+    - Schreibt m.mobile.de auf suchen.mobile.de um
+    - Entfernt flüchtige Tracking- und Session-Parameter (ref, refId, ssid), die den Parser stören
+    - Normalisiert Erstzulassungsparameter (z. B. '1-2024' -> '2024:')
+    - Behebt Encoding-Probleme bei Ortsnamen/Umlauten im gn-Parameter
+    """
+    clean_url = url.strip()
+    if not clean_url:
+        return ""
+
+    # 1. Hostname vereinheitlichen
+    clean_url = clean_url.replace("https://m.mobile.de/", "https://suchen.mobile.de/")
+    clean_url = clean_url.replace("http://m.mobile.de/", "https://suchen.mobile.de/")
+    clean_url = clean_url.replace("https://mobile.de/", "https://suchen.mobile.de/")
+    clean_url = clean_url.replace("http://mobile.de/", "https://suchen.mobile.de/")
+
+    try:
+        parsed = urlparse(clean_url)
+        qs = parse_qs(parsed.query, keep_blank_values=True)
+
+        # 2. Tracking- & Session-Keys entfernen, die Parser-Fehler im Actor verursachen
+        volatile_keys = ["ref", "refId", "ssid", "searchId", "sorting.direction"]
+        for k in volatile_keys:
+            qs.pop(k, None)
+
+        # 3. Erstzulassung formatieren: aus '1-2024' wird '2024:'
+        if "fr" in qs:
+            normalized_fr = []
+            for val in qs["fr"]:
+                cleaned_val = re.sub(r"^\d+-", "", val)
+                if cleaned_val.isdigit() and ":" not in cleaned_val:
+                    cleaned_val = f"{cleaned_val}:"
+                normalized_fr.append(cleaned_val)
+            qs["fr"] = normalized_fr
+
+        # 4. Falls gn (Ortsname mit Umlauten/Komma) vorhanden ist, PLZ in zip auslagern
+        if "gn" in qs:
+            gn_val = qs.pop("gn", [""])[0]
+            plz_match = re.search(r"\b(\d{5})\b", gn_val)
+            if plz_match and "zip" not in qs:
+                qs["zip"] = [plz_match.group(1)]
+
+        new_query = urlencode(qs, doseq=True)
+        return urlunparse(parsed._replace(query=new_query))
+    except Exception as e:
+        logger.warning(f"Konnte URL nicht bereinigen, nutze Fallback: {e}")
+        return clean_url
 
 
 class ApifyProvider:
@@ -21,25 +73,38 @@ class ApifyProvider:
         Ermittelt die aktiven Such-URLs:
         1. Priorität: Unraid Docker-Umgebungsvariable MOBILE_SEARCH_URLS
         2. Priorität: Fallback auf config.json (search_criteria.search_page_urls)
+        Alle URLs werden durch sanitize_mobile_url normalisiert.
         """
+        raw_urls = []
         env_urls = os.getenv("MOBILE_SEARCH_URLS", "").strip()
+
         if env_urls:
-            urls = [
+            raw_urls = [
                 u.strip()
                 for u in env_urls.replace(";", "\n").replace(",", "\n").splitlines()
                 if u.strip().startswith("http")
             ]
-            if urls:
-                logger.info(f"ApifyProvider: Nutze {len(urls)} URL(s) aus Docker-ENV (MOBILE_SEARCH_URLS).")
-                return urls
+            if raw_urls:
+                logger.info(f"ApifyProvider: {len(raw_urls)} URL(s) aus Docker-ENV (MOBILE_SEARCH_URLS) geladen.")
 
-        cfg_urls = config.get("search_criteria", {}).get("search_page_urls", [])
-        if cfg_urls:
-            logger.info(f"ApifyProvider: Nutze {len(cfg_urls)} URL(s) aus config.json.")
-            return cfg_urls
+        if not raw_urls:
+            raw_urls = config.get("search_criteria", {}).get("search_page_urls", [])
+            if raw_urls:
+                logger.info(f"ApifyProvider: {len(raw_urls)} URL(s) aus config.json geladen.")
 
-        logger.warning("ApifyProvider: Keine mobile.de Such-URLs gefunden (weder in ENV noch in config.json).")
-        return []
+        if not raw_urls:
+            logger.warning("ApifyProvider: Keine mobile.de Such-URLs gefunden (weder in ENV noch in config.json).")
+            return []
+
+        # Jede URL durch den Normalisierer schicken
+        sanitized_urls = []
+        for u in raw_urls:
+            clean = sanitize_mobile_url(u)
+            if clean:
+                sanitized_urls.append(clean)
+                logger.debug(f"Bereinigte mobile.de URL: {clean}")
+
+        return sanitized_urls
 
     def search(self, config: Dict[str, Any]) -> List[CarListing]:
         if not self.client or not self.actor_id:
@@ -58,7 +123,7 @@ class ApifyProvider:
             "searchPageURLs": urls
         }
 
-        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} Such-URL(s)...")
+        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} bereinigten Such-URL(s)...")
 
         try:
             run = self.client.actor(self.actor_id).call(run_input=run_input)
@@ -128,7 +193,7 @@ class ApifyProvider:
             else:
                 power_hp = int(raw_power)
 
-            # Ausstattungen (Liste oder String)
+            # Ausstattungsmerkmale extrahieren
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
             if isinstance(raw_features, str):
                 features = [f.strip() for f in raw_features.split(",") if f.strip()]
@@ -171,5 +236,5 @@ class ApifyProvider:
                 deal_score=0.0
             )
         except Exception as e:
-            logger.warning(f"Konnte Apify-Datensatz nicht umwandeln: {e}")
+            logger.warning(f"Konnte Inserat-Eintrag nicht mappen: {e}")
             return None
