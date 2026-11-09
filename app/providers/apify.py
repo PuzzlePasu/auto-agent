@@ -10,14 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_mobile_url(url: str) -> str:
-    """
-    Bereinigt und normalisiert mobile.de-Such-URLs für den Apify-Actor:
-    - Schreibt m.mobile.de auf suchen.mobile.de um
-    - Erzwingt immer den deutschen Sprachparameter &lang=de
-    - Entfernt flüchtige Tracking- und Session-Parameter (ref, refId, ssid)
-    - Normalisiert Erstzulassungsparameter (z. B. '2025' oder '1-2025' -> '2025:')
-    - Behebt Encoding-Probleme bei Ortsnamen/Umlauten im gn-Parameter
-    """
     clean_url = url.strip()
     if not clean_url:
         return ""
@@ -31,15 +23,12 @@ def sanitize_mobile_url(url: str) -> str:
         parsed = urlparse(clean_url)
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
-        # Sprache explizit auf Deutsch festlegen
         qs["lang"] = ["de"]
 
-        # Tracking- & Session-Keys entfernen
         volatile_keys = ["ref", "refId", "ssid", "searchId", "sorting.direction"]
         for k in volatile_keys:
             qs.pop(k, None)
 
-        # Erstzulassung formatieren: z. B. '2025' oder '1-2025' wird '2025:'
         if "fr" in qs:
             normalized_fr = []
             for val in qs["fr"]:
@@ -49,7 +38,6 @@ def sanitize_mobile_url(url: str) -> str:
                 normalized_fr.append(cleaned_val)
             qs["fr"] = normalized_fr
 
-        # Falls gn vorhanden ist, PLZ in zip auslagern
         if "gn" in qs:
             gn_val = qs.pop("gn", [""])[0]
             plz_match = re.search(r"\b(\d{5})\b", gn_val)
@@ -72,7 +60,6 @@ class ApifyProvider:
         self.client = ApifyClient(self.token) if self.token else None
 
     def _extract_float(self, val: Any, default: float = 0.0) -> float:
-        """Extrahiert robust Zahlenwerte aus verschachtelten Dicts, Strings und Zahlen."""
         if val is None:
             return default
         if isinstance(val, (int, float)):
@@ -184,27 +171,35 @@ class ApifyProvider:
             if price <= 500:
                 return None
 
-            # 2. Kilometerstand (prüft Root, specifics und attributes)
+            # 2. Kilometerstand
             raw_mileage = (
-                item.get("mileageInKm")
-                or item.get("mileage")
+                item.get("mileage")
+                or item.get("mileageInKm")
+                or item.get("mileageKm")
                 or item.get("kilometers")
                 or item.get("mileageValue")
             )
             if not raw_mileage and isinstance(item.get("specifics"), dict):
-                raw_mileage = item["specifics"].get("mileage")
+                raw_mileage = item["specifics"].get("mileage") or item["specifics"].get("mileageInKm") or item["specifics"].get("mileageKm")
             if not raw_mileage and isinstance(item.get("attributes"), dict):
-                raw_mileage = item["attributes"].get("mileage")
+                raw_mileage = item["attributes"].get("mileage") or item["attributes"].get("mileageInKm") or item["attributes"].get("mileageKm")
+
+            if not raw_mileage and isinstance(item.get("attributes"), list):
+                for attr in item["attributes"]:
+                    if isinstance(attr, dict) and any(k in str(attr.get("label", "")).lower() for k in ["kilometer", "mileage", "laufleistung"]):
+                        raw_mileage = attr.get("value")
+                        break
 
             if isinstance(raw_mileage, dict):
                 raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
+
             if isinstance(raw_mileage, str):
                 cleaned_m = re.sub(r"[^\d]", "", raw_mileage)
                 mileage = int(cleaned_m) if cleaned_m else 0
             else:
                 mileage = int(raw_mileage or 0)
 
-            # 3. Erstzulassung (prüft Root und specifics)
+            # 3. Erstzulassung
             raw_year = (
                 item.get("firstRegistration")
                 or item.get("registrationDate")
@@ -217,25 +212,61 @@ class ApifyProvider:
             year_match = re.search(r"\b(20\d\d|19\d\d)\b", str(raw_year or ""))
             year = int(year_match.group(1)) if year_match else 2024
 
-            # 4. Motorleistung (PS)
-            raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
-            if isinstance(raw_power, dict):
-                raw_power = raw_power.get("hp") or raw_power.get("powerHp") or 150
-            if isinstance(raw_power, str):
-                ps_match = re.search(r"(\d+)\s*ps", raw_power, re.IGNORECASE)
+            # 4. Motorleistung (PS & kW-Konvertierung)
+            power_hp = 0
+            raw_hp = (
+                item.get("powerHp")
+                or item.get("powerHP")
+                or item.get("hp")
+                or item.get("power_hp")
+            )
+            if raw_hp:
+                if isinstance(raw_hp, dict):
+                    raw_hp = raw_hp.get("value") or raw_hp.get("hp")
+                digits = re.findall(r"\d+", str(raw_hp))
+                if digits:
+                    power_hp = int(digits[0])
+
+            if not power_hp:
+                raw_kw = (
+                    item.get("powerKw")
+                    or item.get("powerKW")
+                    or item.get("power_kw")
+                    or item.get("kw")
+                )
+                if not raw_kw and isinstance(item.get("specifics"), dict):
+                    raw_kw = item["specifics"].get("powerKw") or item["specifics"].get("powerKW") or item["specifics"].get("power")
+                if not raw_kw and isinstance(item.get("attributes"), dict):
+                    raw_kw = item["attributes"].get("powerKw") or item["attributes"].get("powerKW") or item["attributes"].get("power")
+
+                if raw_kw:
+                    if isinstance(raw_kw, dict):
+                        raw_kw = raw_kw.get("value") or raw_kw.get("amount")
+                    digits = re.findall(r"\d+", str(raw_kw))
+                    if digits:
+                        power_hp = int(round(float(digits[0]) * 1.35962))
+
+            if not power_hp:
+                raw_power_str = str(item.get("power") or "")
+                ps_match = re.search(r"(\d+)\s*(?:ps|hp)", raw_power_str, re.IGNORECASE)
                 if ps_match:
                     power_hp = int(ps_match.group(1))
                 else:
-                    digits = re.findall(r"\d+", raw_power)
-                    power_hp = int(digits[0]) if digits else 150
-            else:
-                power_hp = int(raw_power or 150)
+                    kw_match = re.search(r"(\d+)\s*kw", raw_power_str, re.IGNORECASE)
+                    if kw_match:
+                        power_hp = int(round(float(kw_match.group(1)) * 1.35962))
+                    else:
+                        digits = re.findall(r"\d+", raw_power_str)
+                        power_hp = int(digits[0]) if digits else 150
+
+            if power_hp <= 0:
+                power_hp = 150
 
             # 5. Distanz
             raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
             distance_km = self._extract_float(raw_dist, default=25.0)
 
-            # 6. Ausstattungsmerkmale (flacht Strings, Listen und Dictionaries ab)
+            # 6. Ausstattungsmerkmale
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
             features = []
             if isinstance(raw_features, str):
@@ -249,7 +280,7 @@ class ApifyProvider:
                         if val:
                             features.append(str(val).strip())
 
-            # 7. Bild-URL (durchsucht alle gängigen Apify-/Mobile.de-Felder)
+            # 7. Bild-URL
             image_url = ""
             img_candidates = [
                 item.get("images"),
