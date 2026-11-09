@@ -1,6 +1,7 @@
 import os
 import logging
 import re
+import math
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from apify_client import ApifyClient
@@ -8,8 +9,13 @@ from app.database.models import CarListing
 
 logger = logging.getLogger(__name__)
 
+# Standard-Referenzkoordinaten (z. B. Raum Würzburg)
+REF_LAT = 49.7401
+REF_LON = 9.9505
+
 
 def sanitize_mobile_url(url: str) -> str:
+    """Bereinigt mobile.de-Such-URLs für den memo23-Actor."""
     clean_url = url.strip()
     if not clean_url:
         return ""
@@ -23,10 +29,11 @@ def sanitize_mobile_url(url: str) -> str:
         parsed = urlparse(clean_url)
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
+        # Sprache auf Deutsch fixieren
         qs["lang"] = ["de"]
 
-        volatile_keys = ["ref", "refId", "ssid", "searchId", "sorting.direction"]
-        for k in volatile_keys:
+        # Flüchtige Tracking-Keys entfernen
+        for k in ["ref", "refId", "ssid", "searchId", "sorting.direction"]:
             qs.pop(k, None)
 
         if "fr" in qs:
@@ -38,12 +45,6 @@ def sanitize_mobile_url(url: str) -> str:
                 normalized_fr.append(cleaned_val)
             qs["fr"] = normalized_fr
 
-        if "gn" in qs:
-            gn_val = qs.pop("gn", [""])[0]
-            plz_match = re.search(r"\b(\d{5})\b", gn_val)
-            if plz_match and "zip" not in qs:
-                qs["zip"] = [plz_match.group(1)]
-
         new_query = urlencode(qs, doseq=True)
         return urlunparse(parsed._replace(query=new_query))
     except Exception as e:
@@ -51,12 +52,27 @@ def sanitize_mobile_url(url: str) -> str:
         return clean_url
 
 
+def calculate_haversine_distance(lat1: float, lon1: float, lat2: float = REF_LAT, lon2: float = REF_LON) -> float:
+    """Berechnet die Luftlinie in km zwischen zwei Koordinaten."""
+    try:
+        r = 6371.0
+        d_lat = math.radians(lat2 - lat1)
+        d_lon = math.radians(lon2 - lon1)
+        a = (math.sin(d_lat / 2) ** 2 +
+             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return round(r * c, 1)
+    except Exception:
+        return 25.0
+
+
 class ApifyProvider:
     name = "apify"
 
     def __init__(self):
         self.token = os.getenv("APIFY_API_TOKEN")
-        self.actor_id = os.getenv("APIFY_ACTOR_ID")
+        # Standardmäßig auf memo23/mobile-de-scraper setzen
+        self.actor_id = os.getenv("APIFY_ACTOR_ID", "memo23/mobile-de-scraper")
         self.client = ApifyClient(self.token) if self.token else None
 
     def _extract_float(self, val: Any, default: float = 0.0) -> float:
@@ -65,7 +81,7 @@ class ApifyProvider:
         if isinstance(val, (int, float)):
             return float(val)
         if isinstance(val, dict):
-            for key in ["amount", "gross", "value", "price", "net", "total"]:
+            for key in ["amount", "value", "price", "gross", "net"]:
                 if key in val:
                     return self._extract_float(val[key], default)
             return default
@@ -113,17 +129,20 @@ class ApifyProvider:
 
         urls = self.get_search_urls(config)
         if not urls:
-            logger.error("Abbruch: Keine gültigen searchPageURLs für den Apify-Actor vorhanden.")
+            logger.error("Abbruch: Keine gültigen URLs vorhanden.")
             return []
 
+        # memo23 erwartet: startUrls als Liste von Objekten mit "url"-Key
+        start_urls = [{"url": u} for u in urls]
+
         run_input = {
-            "automaticPaging": True,
-            "searchCategory": "Car",
-            "searchPageURLs": urls,
-            "language": "de"
+            "startUrls": start_urls,
+            "maxItems": 1000,
+            "monitoringMode": False,
+            "maxConcurrency": 10
         }
 
-        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} URL(s)...")
+        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(start_urls)} URL(s)...")
 
         try:
             run = self.client.actor(self.actor_id).call(run_input=run_input)
@@ -140,15 +159,7 @@ class ApifyProvider:
             listings: List[CarListing] = []
 
             for raw_item in dataset_client.iterate_items():
-                if hasattr(raw_item, "model_dump"):
-                    item = raw_item.model_dump()
-                elif hasattr(raw_item, "dict"):
-                    item = raw_item.dict()
-                elif isinstance(raw_item, dict):
-                    item = raw_item
-                else:
-                    item = dict(raw_item)
-
+                item = raw_item if isinstance(raw_item, dict) else dict(raw_item)
                 car = self._map_to_car_listing(item)
                 if car:
                     listings.append(car)
@@ -162,167 +173,126 @@ class ApifyProvider:
 
     def _map_to_car_listing(self, item: Dict[str, Any]) -> Optional[CarListing]:
         try:
-            ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
-            title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
+            # Gelöschte oder nicht mehr verfügbare Inserate überspringen
+            if item.get("available") is False:
+                return None
 
-            # 1. Preis
-            raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
-            price = self._extract_float(raw_price, default=0.0)
+            ext_id = str(item.get("id") or item.get("adId") or "")
+            if not ext_id:
+                return None
+
+            url = item.get("url") or f"https://suchen.mobile.de/fahrzeuge/details.html?id={ext_id}"
+            title = str(item.get("title") or item.get("shortTitle") or "Unbekanntes Fahrzeug")
+
+            # 1. Preis aus price.grs.amount (oder Fallback)
+            price = 0.0
+            price_obj = item.get("price")
+            if isinstance(price_obj, dict):
+                grs = price_obj.get("grs")
+                if isinstance(grs, dict):
+                    price = self._extract_float(grs.get("amount"), 0.0)
+                else:
+                    price = self._extract_float(price_obj.get("amount") or price_obj.get("value"), 0.0)
+            elif price_obj:
+                price = self._extract_float(price_obj, 0.0)
+
             if price <= 500:
                 return None
 
-            # 2. Kilometerstand
-            raw_mileage = (
-                item.get("mileage")
-                or item.get("mileageInKm")
-                or item.get("mileageKm")
-                or item.get("kilometers")
-                or item.get("mileageValue")
-            )
-            if not raw_mileage and isinstance(item.get("specifics"), dict):
-                raw_mileage = item["specifics"].get("mileage") or item["specifics"].get("mileageInKm") or item["specifics"].get("mileageKm")
-            if not raw_mileage and isinstance(item.get("attributes"), dict):
-                raw_mileage = item["attributes"].get("mileage") or item["attributes"].get("mileageInKm") or item["attributes"].get("mileageKm")
+            # Hilfs-Lookup: attributes-Array indizieren (nach tag)
+            attr_map = {}
+            if isinstance(item.get("attributes"), list):
+                for a in item["attributes"]:
+                    if isinstance(a, dict) and "tag" in a:
+                        attr_map[a["tag"]] = a.get("value", "")
 
-            if not raw_mileage and isinstance(item.get("attributes"), list):
-                for attr in item["attributes"]:
-                    if isinstance(attr, dict) and any(k in str(attr.get("label", "")).lower() for k in ["kilometer", "mileage", "laufleistung"]):
-                        raw_mileage = attr.get("value")
-                        break
+            # Hilfs-Lookup: basicInfo.attr
+            basic_attr = {}
+            if isinstance(item.get("basicInfo"), dict) and isinstance(item["basicInfo"].get("attr"), dict):
+                basic_attr = item["basicInfo"]["attr"]
 
-            if isinstance(raw_mileage, dict):
-                raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
+            # 2. Kilometerstand (basicInfo.attr.ml oder attributes[mileage])
+            raw_ml = basic_attr.get("ml") or attr_map.get("mileage") or item.get("mileage") or ""
+            cleaned_ml = re.sub(r"[^\d]", "", str(raw_ml))
+            mileage = int(cleaned_ml) if cleaned_ml else 0
 
-            if isinstance(raw_mileage, str):
-                cleaned_m = re.sub(r"[^\d]", "", raw_mileage)
-                mileage = int(cleaned_m) if cleaned_m else 0
-            else:
-                mileage = int(raw_mileage or 0)
-
-            # 3. Erstzulassung
-            raw_year = (
-                item.get("firstRegistration")
-                or item.get("registrationDate")
-                or item.get("firstRegistrationDate")
-                or item.get("year")
-            )
-            if not raw_year and isinstance(item.get("specifics"), dict):
-                raw_year = item["specifics"].get("firstRegistration")
-
-            year_match = re.search(r"\b(20\d\d|19\d\d)\b", str(raw_year or ""))
+            # 3. Erstzulassung (basicInfo.attr.fr oder attributes[firstRegistration])
+            raw_fr = basic_attr.get("fr") or attr_map.get("firstRegistration") or ""
+            year_match = re.search(r"\b(20\d\d|19\d\d)\b", str(raw_fr))
             year = int(year_match.group(1)) if year_match else 2024
 
-            # 4. Motorleistung (PS & kW-Konvertierung)
+            # 4. Motorleistung (basicInfo.attr.pw oder attributes[power])
+            # Bsp: "478 kW (650 hp)" oder "110 kW (150 PS)"
+            raw_pw = basic_attr.get("pw") or attr_map.get("power") or ""
             power_hp = 0
-            raw_hp = (
-                item.get("powerHp")
-                or item.get("powerHP")
-                or item.get("hp")
-                or item.get("power_hp")
-            )
-            if raw_hp:
-                if isinstance(raw_hp, dict):
-                    raw_hp = raw_hp.get("value") or raw_hp.get("hp")
-                digits = re.findall(r"\d+", str(raw_hp))
-                if digits:
-                    power_hp = int(digits[0])
 
-            if not power_hp:
-                raw_kw = (
-                    item.get("powerKw")
-                    or item.get("powerKW")
-                    or item.get("power_kw")
-                    or item.get("kw")
-                )
-                if not raw_kw and isinstance(item.get("specifics"), dict):
-                    raw_kw = item["specifics"].get("powerKw") or item["specifics"].get("powerKW") or item["specifics"].get("power")
-                if not raw_kw and isinstance(item.get("attributes"), dict):
-                    raw_kw = item["attributes"].get("powerKw") or item["attributes"].get("powerKW") or item["attributes"].get("power")
-
-                if raw_kw:
-                    if isinstance(raw_kw, dict):
-                        raw_kw = raw_kw.get("value") or raw_kw.get("amount")
-                    digits = re.findall(r"\d+", str(raw_kw))
-                    if digits:
-                        power_hp = int(round(float(digits[0]) * 1.35962))
-
-            if not power_hp:
-                raw_power_str = str(item.get("power") or "")
-                ps_match = re.search(r"(\d+)\s*(?:ps|hp)", raw_power_str, re.IGNORECASE)
-                if ps_match:
-                    power_hp = int(ps_match.group(1))
+            hp_match = re.search(r"(\d+)\s*(?:hp|ps)", str(raw_pw), re.IGNORECASE)
+            if hp_match:
+                power_hp = int(hp_match.group(1))
+            else:
+                kw_match = re.search(r"(\d+)\s*kw", str(raw_pw), re.IGNORECASE)
+                if kw_match:
+                    power_hp = int(round(float(kw_match.group(1)) * 1.35962))
                 else:
-                    kw_match = re.search(r"(\d+)\s*kw", raw_power_str, re.IGNORECASE)
-                    if kw_match:
-                        power_hp = int(round(float(kw_match.group(1)) * 1.35962))
-                    else:
-                        digits = re.findall(r"\d+", raw_power_str)
-                        power_hp = int(digits[0]) if digits else 150
+                    digits = re.findall(r"\d+", str(raw_pw))
+                    power_hp = int(digits[0]) if digits else 150
 
-            if power_hp <= 0:
-                power_hp = 150
+            # 5. Kraftstoff & Getriebe
+            fuel_type = str(basic_attr.get("ft") or attr_map.get("fuel") or item.get("fuel") or "Benzin")
+            transmission = str(attr_map.get("gearbox") or attr_map.get("transmission") or "Automatik")
 
-            # 5. Distanz
-            raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
-            distance_km = self._extract_float(raw_dist, default=25.0)
+            # 6. Händler, Ort, PLZ & Distanz
+            contact = item.get("contact") if isinstance(item.get("contact"), dict) else {}
+            dealer_name = str(contact.get("name") or "Händler")
+            postal_code = str(basic_attr.get("z") or contact.get("address2") or "97271")
+            plz_match = re.search(r"\b(\d{5})\b", postal_code)
+            if plz_match:
+                postal_code = plz_match.group(1)
 
-            # 6. Ausstattungsmerkmale
-            raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
+            city = str(basic_attr.get("loc") or "")
+            if not city and contact.get("address2"):
+                city = contact["address2"].replace(postal_code, "").replace("DE-", "").strip()
+            if not city:
+                city = "Würzburg"
+
+            # Distanz via Koordinaten berechnen
+            distance_km = 25.0
+            lat_long = contact.get("latLong")
+            if isinstance(lat_long, dict) and "lat" in lat_long and "lon" in lat_long:
+                distance_km = calculate_haversine_distance(float(lat_long["lat"]), float(lat_long["lon"]))
+
+            # 7. Ausstattungsmerkmale (features-Array + Highlights)
             features = []
-            if isinstance(raw_features, str):
-                features = [f.strip() for f in raw_features.split(",") if f.strip()]
-            elif isinstance(raw_features, list):
-                for f in raw_features:
-                    if isinstance(f, str) and f.strip():
-                        features.append(f.strip())
-                    elif isinstance(f, dict):
-                        val = f.get("label") or f.get("name") or f.get("value")
-                        if val:
-                            features.append(str(val).strip())
+            raw_feats = item.get("features") or []
+            if isinstance(raw_feats, list):
+                features = [str(f).strip() for f in raw_feats if str(f).strip()]
 
-            # 7. Bild-URL
+            # 8. Bild-URL aus images: [{"uri": "img.classistatic.de/..."}]
             image_url = ""
-            img_candidates = [
-                item.get("images"),
-                item.get("imageUrls"),
-                item.get("photos"),
-                item.get("gallery"),
-                item.get("media", {}).get("images") if isinstance(item.get("media"), dict) else None,
-                item.get("thumbnail"),
-                item.get("imageUrl"),
-                item.get("image")
-            ]
+            raw_imgs = item.get("images") or []
+            if isinstance(raw_imgs, list) and len(raw_imgs) > 0:
+                first_img = raw_imgs[0]
+                if isinstance(first_img, dict):
+                    uri = first_img.get("uri") or first_img.get("url") or ""
+                elif isinstance(first_img, str):
+                    uri = first_img
+                else:
+                    uri = ""
 
-            for cand in img_candidates:
-                if not cand:
-                    continue
-                if isinstance(cand, list) and len(cand) > 0:
-                    first = cand[0]
-                    if isinstance(first, str) and first.startswith("http"):
-                        image_url = first
-                        break
-                    elif isinstance(first, dict):
-                        image_url = first.get("url") or first.get("src") or first.get("uri") or ""
-                        if image_url:
-                            break
-                elif isinstance(cand, str) and (cand.startswith("http") or cand.startswith("//")):
-                    image_url = cand
-                    break
+                if uri:
+                    if uri.startswith("http://") or uri.startswith("https://"):
+                        image_url = uri
+                    elif uri.startswith("//"):
+                        image_url = f"https:{uri}"
+                    else:
+                        image_url = f"https://{uri}"
 
-            if image_url and image_url.startswith("//"):
-                image_url = f"https:{image_url}"
+            # 9. Marke & Modell
+            make_obj = item.get("make")
+            make = make_obj.get("localized") if isinstance(make_obj, dict) else str(item.get("makeKey") or "Unbekannt")
 
-            # 8. Marke und Modell
-            make = item.get("make")
-            model = item.get("model")
-            if not make:
-                parts = title.split()
-                make = parts[0] if parts else "Unbekannt"
-                model = " ".join(parts[1:3]) if len(parts) > 1 else "Unbekannt"
-            elif not model:
-                model = title.replace(make, "").strip() or "Modell"
-
-            url = item.get("url") or item.get("adUrl") or item.get("link") or ""
+            model_obj = item.get("model")
+            model = model_obj.get("localized") if isinstance(model_obj, dict) else str(item.get("modelKey") or "Modell")
 
             return CarListing(
                 id=None,
@@ -336,16 +306,16 @@ class ApifyProvider:
                 mileage=mileage,
                 first_registration_year=year,
                 power_hp=power_hp,
-                fuel_type=str(item.get("fuel") or item.get("fuelType") or "Benzin"),
-                transmission=str(item.get("transmission") or "Automatik"),
-                dealer_name=str(item.get("dealerName") or item.get("seller") or "Händler"),
-                postal_code=str(item.get("postalCode") or item.get("zip") or "97271"),
-                city=str(item.get("city") or item.get("location") or "Würzburg"),
+                fuel_type=fuel_type,
+                transmission=transmission,
+                dealer_name=dealer_name,
+                postal_code=postal_code,
+                city=city,
                 distance_km=distance_km,
                 features=features,
                 deal_score=0.0,
                 image_url=image_url
             )
         except Exception as e:
-            logger.warning(f"Konnte Inserat-Eintrag nicht mappen: {e}")
+            logger.warning(f"Konnte memo23-Inserat nicht mappen: {e}")
             return None
