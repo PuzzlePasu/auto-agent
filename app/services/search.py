@@ -200,50 +200,11 @@ class SearchService:
         return len(all_active_cars)
 
     def _filter_listings(self, listings: List[CarListing], config: Dict[str, Any]) -> List[CarListing]:
-        filters = config.get("search_criteria", {}).get("filters", {})
-        max_price = filters.get("max_price", 27000)
-        max_mileage = filters.get("max_mileage", 80000)
-        min_year = filters.get("min_year", 2020)
-        min_power = filters.get("min_power_hp", 150)
-        max_power = filters.get("max_power_hp", 200)
-        dealer_only = filters.get("dealer_only", True)
-        exclude_hybrids = filters.get("exclude_hybrids", True)
-        excluded_colors = [c.lower() for c in filters.get("exclude_colors", [])]
-
-        valid = []
-        hybrid_keywords = ["hybrid", "mhev", "mild-hybrid", "mild hybrid", "phev", "plug-in", "48v", "etsi", "gte"]
-
-        for car in listings:
-            # 1. Budget & Fahrleistung
-            if car.price > max_price or car.price <= 1000:
-                continue
-            if car.mileage > max_mileage:
-                continue
-            if car.first_registration_year < min_year:
-                continue
-            if not (min_power <= car.power_hp <= max_power):
-                continue
-
-            # 2. Reiner Benziner (keine Hybride mit Regex-Wortgrenzen)
-            full_text = f"{car.title} {car.fuel_type} {' '.join(car.features)}".lower()
-            if exclude_hybrids and any(self._matches_alias(hk, full_text) for hk in hybrid_keywords):
-                continue
-            if "benzin" not in car.fuel_type.lower() and "petrol" not in car.fuel_type.lower():
-                continue
-
-            # 3. Weiß ausschließen
-            if any(self._matches_alias(ec, full_text) for ec in excluded_colors):
-                continue
-
-            # 4. Nur Händlerangebote
-            if dealer_only:
-                seller = (car.dealer_name or "").lower()
-                if "privat" in seller or seller == "":
-                    continue
-
-            valid.append(car)
-
-        return valid
+        """
+        Alle Inserate aus der mobile.de Search-URL direkt übernehmen.
+        Es werden nur noch ungültige Daten (z.B. Preis <= 0) verworfen.
+        """
+        return [car for car in listings if car.price > 1000]
 
     def _calculate_market_metrics(self, listings: List[CarListing]) -> tuple:
         if not listings:

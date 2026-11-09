@@ -1,52 +1,7 @@
 {
   "search_criteria": {
-    "location": {
-      "postal_code": "97271",
-      "city": "Kleinrinderfeld",
-      "radius_km": 100,
-      "latitude": 49.6989,
-      "longitude": 9.8486
-    },
-    "filters": {
-      "max_price": 27000,
-      "min_year": 2020,
-      "max_mileage": 80000,
-      "min_power_hp": 150,
-      "max_power_hp": 200,
-      "transmission": "Automatik",
-      "fuel_type": "Benzin",
-      "dealer_only": true,
-      "exclude_hybrids": true,
-      "exclude_colors": [
-        "weiß",
-        "weiss",
-        "white",
-        "oryxweiß",
-        "alpinweiß",
-        "pure white"
-      ]
-    },
-    "models": [
-      {
-        "make": "Volkswagen",
-        "model": "Golf"
-      },
-      {
-        "make": "BMW",
-        "model": "1er"
-      },
-      {
-        "make": "Cupra",
-        "model": "Leon"
-      },
-      {
-        "make": "Audi",
-        "model": "A3"
-      },
-      {
-        "make": "Hyundai",
-        "model": "i30"
-      }
+    "search_page_urls": [
+      ""
     ]
   },
   "scoring_weights": {
@@ -75,6 +30,15 @@
       "sunset red",
       "misano blau",
       "snapper rocks blue"
+    ],
+    "desired_features": [
+      "Matrix LED-Scheinwerfer",
+      "ACC / adaptiver Tempomat",
+      "Head-Up Display",
+      "Massagesitz / ErgoActive",
+      "Apple CarPlay / Android Auto",
+      "Mind. 2-Zonen Klimaautomatik",
+      "Sitzheizung & Lenkradheizung"
     ],
     "feature_aliases": {
       "Matrix LED-Scheinwerfer": [

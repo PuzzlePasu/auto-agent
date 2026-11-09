@@ -1,135 +1,175 @@
 import os
 import logging
-import requests
-from typing import List, Dict, Any
-from app.providers.base import BaseCarProvider
+import re
+from typing import List, Dict, Any, Optional
+from apify_client import ApifyClient
 from app.database.models import CarListing
 
 logger = logging.getLogger(__name__)
 
-class ApifyProvider(BaseCarProvider):
-    def __init__(self, api_token: str = None):
-        super().__init__(name="apify", priority=1)
-        self.api_token = (api_token or os.getenv("APIFY_TOKEN", "")).strip()
-        self.base_url = "https://api.apify.com/v2"
+
+class ApifyProvider:
+    name = "apify"
+
+    def __init__(self):
+        self.token = os.getenv("APIFY_API_TOKEN")
+        self.actor_id = os.getenv("APIFY_ACTOR_ID")
+        self.client = ApifyClient(self.token) if self.token else None
+
+    def get_search_urls(self, config: Dict[str, Any]) -> List[str]:
+        """
+        Ermittelt die aktiven Such-URLs:
+        1. Priorität: Unraid Docker-Umgebungsvariable MOBILE_SEARCH_URLS
+        2. Priorität: Fallback auf config.json (search_criteria.search_page_urls)
+        """
+        env_urls = os.getenv("MOBILE_SEARCH_URLS", "").strip()
+        if env_urls:
+            urls = [
+                u.strip()
+                for u in env_urls.replace(";", "\n").replace(",", "\n").splitlines()
+                if u.strip().startswith("http")
+            ]
+            if urls:
+                logger.info(f"ApifyProvider: Nutze {len(urls)} URL(s) aus Docker-ENV (MOBILE_SEARCH_URLS).")
+                return urls
+
+        cfg_urls = config.get("search_criteria", {}).get("search_page_urls", [])
+        if cfg_urls:
+            logger.info(f"ApifyProvider: Nutze {len(cfg_urls)} URL(s) aus config.json.")
+            return cfg_urls
+
+        logger.warning("ApifyProvider: Keine mobile.de Such-URLs gefunden (weder in ENV noch in config.json).")
+        return []
 
     def search(self, config: Dict[str, Any]) -> List[CarListing]:
-        if not self.api_token:
-            logger.error("Kein APIFY_TOKEN in den Umgebungsvariablen gefunden! Abbruch.")
+        if not self.client or not self.actor_id:
+            logger.error("APIFY_API_TOKEN oder APIFY_ACTOR_ID fehlt in der Umgebung.")
             return []
 
-        headers = {
-            "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Apify verlangt für User/Actor eine Tilde (~) im URL-Pfad statt eines Slashs (/)
-        raw_actor = os.getenv("APIFY_ACTOR_ID", "epctex/mobile-de-scraper").strip()
-        actor_id = raw_actor.replace("/", "~")
-        
-        search_criteria = config.get("search_criteria", {})
-        filters = search_criteria.get("filters", {})
-        location = search_criteria.get("location", {})
-        models = search_criteria.get("models", [])
+        urls = self.get_search_urls(config)
+        if not urls:
+            logger.error("Abbruch: Keine gültigen searchPageURLs für den Apify-Actor vorhanden.")
+            return []
 
-        # Start-URLs für mobile.de oder direkte Filter generieren
-        # epctex/mobile-de-scraper akzeptiert startUrls oder Suchfilter
-        mobile_url = (
-            f"https://suchen.mobile.de/fahrzeuge/search.html?"
-            f"dam=0&isSearchRequest=true&vc=Car"
-            f"&ft=PETROL"
-            f"&tr=AUTOMATIC_GEAR"
-            f"&minPowerAsArray={filters.get('min_power_hp', 150)}&maxPowerAsArray={filters.get('max_power_hp', 200)}"
-            f"&maxPrice={filters.get('max_price', 27000)}"
-            f"&minFirstRegistrationDate={filters.get('min_year', 2020)}"
-            f"&maxMileage={filters.get('max_mileage', 80000)}"
-            f"&zipcode={location.get('postal_code', '97271')}&zipcodeRadius={location.get('radius_km', 100)}"
-        )
-
-        payload = {
-            "startUrls": [{"url": mobile_url}],
-            "maxItems": 40,
-            "proxy": {
-                "useApifyProxy": True,
-                "apifyProxyGroups": ["RESIDENTIAL"]
-            }
+        # Exakter Payload für den mobile.de Actor
+        run_input = {
+            "automaticPaging": True,
+            "searchCategory": "Car",
+            "searchPageURLs": urls
         }
 
-        url = f"{self.base_url}/acts/{actor_id}/run-sync-get-dataset-items"
-        logger.info(f"Sende Suchauftrag an Apify Actor '{actor_id}' (kann 30-90 Sekunden dauern)...")
+        logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} Such-URL(s)...")
 
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=180)
-            
-            if response.status_code != 200:
-                logger.error(f"Apify API Fehler HTTP {response.status_code}: {response.text}")
+            run = self.client.actor(self.actor_id).call(run_input=run_input)
+            dataset_id = run.get("defaultDatasetId")
+            if not dataset_id:
+                logger.error("Apify Actor lieferte keine defaultDatasetId zurück.")
                 return []
 
-            raw_items = response.json()
-            if not isinstance(raw_items, list):
-                logger.error(f"Unerwartete Apify-Antwort (keine Liste): {raw_items}")
-                return []
-
-            logger.info(f"Erfolgreich {len(raw_items)} Roh-Fahrzeuge von Apify empfangen.")
-            
+            dataset_client = self.client.dataset(dataset_id)
             listings: List[CarListing] = []
-            for item in raw_items:
-                car = self._map_item(item, location)
+
+            for item in dataset_client.iterate_items():
+                car = self._map_to_car_listing(item)
                 if car:
                     listings.append(car)
 
+            logger.info(f"Apify Actor erfolgreich: {len(listings)} Inserate aus Dataset extrahiert.")
             return listings
 
-        except requests.exceptions.Timeout:
-            logger.error("Zeitüberschreitung (Timeout) beim Warten auf den Apify-Scraper nach 180 Sekunden.")
-            return []
         except Exception as e:
-            logger.error(f"Apify Abruf fehlgeschlagen: {e}", exc_info=True)
+            logger.error(f"Fehler während des Apify-Scraping-Laufs: {e}", exc_info=True)
             return []
 
-    def _map_item(self, item: Dict[str, Any], location: Dict[str, Any]) -> CarListing:
-        # Extrahiere Bild-Array
-        raw_images = item.get("images") or item.get("photos") or []
-        if isinstance(raw_images, str):
-            raw_images = [raw_images]
-        img_url = raw_images[0] if raw_images else (item.get("imageUrl") or "")
+    def _map_to_car_listing(self, item: Dict[str, Any]) -> Optional[CarListing]:
+        """Mappt das vom Apify-Actor gelieferte Inserats-JSON auf das CarListing-Datenmodell."""
+        try:
+            ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
+            title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
 
-        # Preis bereinigen
-        raw_price = item.get("price")
-        if isinstance(raw_price, dict):
-            price_val = float(raw_price.get("amount", 0.0))
-        elif isinstance(raw_price, (int, float)):
-            price_val = float(raw_price)
-        else:
-            price_val = 0.0
+            # Preis parsen
+            raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
+            if isinstance(raw_price, str):
+                cleaned_price = re.sub(r"[^\d.,]", "", raw_price).replace(".", "").replace(",", ".")
+                price = float(cleaned_price) if cleaned_price else 0.0
+            else:
+                price = float(raw_price)
 
-        if price_val <= 0:
+            # Mindest-Plausibilität: Inserate ohne Preis verwerfen
+            if price <= 500:
+                return None
+
+            # Kilometerstand
+            raw_mileage = item.get("mileage") or item.get("mileageInKm") or item.get("kilometers") or 0
+            if isinstance(raw_mileage, str):
+                cleaned_mileage = re.sub(r"[^\d]", "", raw_mileage)
+                mileage = int(cleaned_mileage) if cleaned_mileage else 0
+            else:
+                mileage = int(raw_mileage)
+
+            # Erstzulassung
+            raw_year = item.get("firstRegistration") or item.get("year") or 2020
+            if isinstance(raw_year, str):
+                year_match = re.search(r"\b(19\d\d|20\d\d)\b", raw_year)
+                year = int(year_match.group(1)) if year_match else 2020
+            else:
+                year = int(raw_year)
+
+            # Leistung in PS
+            raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
+            if isinstance(raw_power, str):
+                ps_match = re.search(r"(\d+)\s*ps", raw_power, re.IGNORECASE)
+                if ps_match:
+                    power_hp = int(ps_match.group(1))
+                else:
+                    digits = re.findall(r"\d+", raw_power)
+                    power_hp = int(digits[0]) if digits else 150
+            else:
+                power_hp = int(raw_power)
+
+            # Ausstattungen (Liste oder String)
+            raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
+            if isinstance(raw_features, str):
+                features = [f.strip() for f in raw_features.split(",") if f.strip()]
+            elif isinstance(raw_features, list):
+                features = [str(f).strip() for f in raw_features if str(f).strip()]
+            else:
+                features = []
+
+            # Hersteller und Modell ableiten
+            make = item.get("make")
+            model = item.get("model")
+            if not make:
+                parts = title.split()
+                make = parts[0] if parts else "Unbekannt"
+                model = " ".join(parts[1:3]) if len(parts) > 1 else "Unbekannt"
+            elif not model:
+                model = title.replace(make, "").strip() or "Modell"
+
+            url = item.get("url") or item.get("adUrl") or item.get("link") or ""
+
+            return CarListing(
+                id=None,
+                external_id=ext_id,
+                provider="mobile.de",
+                url=url,
+                title=title,
+                make=make,
+                model=model,
+                price=price,
+                mileage=mileage,
+                first_registration_year=year,
+                power_hp=power_hp,
+                fuel_type=str(item.get("fuel") or item.get("fuelType") or "Benzin"),
+                transmission=str(item.get("transmission") or "Automatik"),
+                dealer_name=str(item.get("dealerName") or item.get("seller") or "Händler"),
+                postal_code=str(item.get("postalCode") or item.get("zip") or "97271"),
+                city=str(item.get("city") or item.get("location") or "Würzburg"),
+                distance_km=float(item.get("distance") or item.get("distanceInKm") or 25.0),
+                features=features,
+                deal_score=0.0
+            )
+        except Exception as e:
+            logger.warning(f"Konnte Apify-Datensatz nicht umwandeln: {e}")
             return None
-
-        # Titel & Marke
-        title = item.get("title") or item.get("name") or "Angebot"
-        make = item.get("make") or ("Volkswagen" if "Golf" in title else "Unbekannt")
-        model = item.get("model") or ("Golf" if "Golf" in title else "Kompakt")
-
-        return CarListing(
-            provider="mobile.de",
-            external_id=str(item.get("id") or item.get("adId") or hash(item.get("url", ""))),
-            url=item.get("url") or item.get("link") or "https://www.mobile.de",
-            make=make,
-            model=model,
-            title=title,
-            price=price_val,
-            mileage=int(item.get("mileage") or item.get("km") or 0),
-            first_registration_year=int(item.get("firstRegistrationYear") or item.get("year") or 2021),
-            power_hp=int(item.get("powerHp") or item.get("hp") or 150),
-            transmission="Automatik",
-            fuel_type="Benzin",
-            postal_code=str(item.get("postalCode") or location.get("postal_code", "97271")),
-            city=item.get("city") or location.get("city", ""),
-            distance_km=float(item.get("distance") or 15.0),
-            dealer_name=item.get("dealerName") or item.get("seller") or "Autohaus",
-            features=item.get("features") or item.get("equipment") or [],
-            image_url=img_url,
-            images=raw_images,
-            is_active=True
-        )

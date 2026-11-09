@@ -7,7 +7,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-black text-white">System-Konfiguration</h1>
-      <p class="text-xs text-slate-400">Verwalte Standort, Suchfilter, Zielfeatures, ACC/Matrix-Aliase und Gewichte direkt im Web.</p>
+      <p class="text-xs text-slate-400">Verwalte Such-URLs, Ziel-Ausstattungen, Synonym-Erkennung und Score-Gewichte direkt im Web.</p>
     </div>
     <div class="flex items-center gap-2">
       <form action="/api/rescore" method="POST" class="m-0">
@@ -37,8 +37,6 @@
   </div>
   {% endif %}
 
-  {% set loc = config.get('search_criteria', {}).get('location', {}) %}
-  {% set flt = config.get('search_criteria', {}).get('filters', {}) %}
   {% set wgt = config.get('scoring_weights', {}) %}
   {% set rules = config.get('scoring_rules', {}) %}
 
@@ -61,91 +59,55 @@
     <!-- 1. VISUELLER EDITOR -->
     <div id="sectionFields" class="space-y-6">
       
-      <!-- Standort & Suchradius -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-location-dot text-rose-500"></i> Standort &amp; Suchradius
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Postleitzahl</label>
-            <input type="text" name="postal_code" value="{{ loc.get('postal_code', '97271') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Wohnort</label>
-            <input type="text" name="city" value="{{ loc.get('city', 'Kleinrinderfeld') }}" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Suchradius (km)</label>
-            <input type="number" name="radius_km" value="{{ loc.get('radius_km', 100) }}" min="10" max="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-        </div>
-      </div>
-
-      <!-- Fahrzeug- & Budgetfilter -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-car text-blue-400"></i> Fahrzeug- &amp; Ausschlussfilter
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Maximalpreis (€)</label>
-            <input type="number" name="max_price" value="{{ flt.get('max_price', 27000)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Max. Laufleistung (km)</label>
-            <input type="number" name="max_mileage" value="{{ flt.get('max_mileage', 80000)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Mindest-Baujahr</label>
-            <input type="number" name="min_year" value="{{ flt.get('min_year', 2020)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Leistung von (PS)</label>
-            <input type="number" name="min_power_hp" value="{{ flt.get('min_power_hp', 150)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-          <div>
-            <label class="text-slate-400 font-semibold block mb-1">Leistung bis (PS)</label>
-            <input type="number" name="max_power_hp" value="{{ flt.get('max_power_hp', 200)|int }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold outline-none focus:border-blue-500">
-          </div>
-        </div>
-
-        <div class="pt-2 flex flex-col sm:flex-row gap-4 text-xs">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" name="exclude_hybrids" value="true" {% if flt.get('exclude_hybrids', True) %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
-            <span class="text-slate-300 font-medium">Hybride ausschließen (kein Mild-Hybrid / eTSI / PHEV)</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" name="exclude_white" value="true" {% if flt.get('exclude_colors') %}checked{% endif %} class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
-            <span class="text-slate-300 font-medium">Weiße Autos ausschließen</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Gesuchte Automodelle -->
-      <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
+      <!-- Haupt-Steuerung: mobile.de Such-URLs -->
+      <div class="glass-card rounded-2xl p-6 border {% if urls_from_env %}border-emerald-500/40 bg-emerald-950/10{% else %}border-blue-500/40 bg-blue-950/10{% endif %} space-y-3">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <i class="fa-solid fa-list-check text-blue-400"></i> Gesuchte Modelle
-          </h2>
-          <button type="button" onclick="addModelRow()" class="px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-semibold hover:bg-blue-600/30 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-plus text-[10px]"></i> Modell hinzufügen
-          </button>
-        </div>
-        <div id="modelsContainer" class="space-y-2">
-          {% for m in config.get('search_criteria', {}).get('models', []) %}
-          <div class="model-row flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
-            <input type="text" name="model_make" value="{{ m.make }}" placeholder="Hersteller" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" required>
-            <input type="text" name="model_name" value="{{ m.model }}" placeholder="Modellreihe" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" required>
-            <button type="button" onclick="this.closest('.model-row').remove()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition flex items-center justify-center">
-              <i class="fa-solid fa-trash text-xs"></i>
-            </button>
+          <div>
+            <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-link {% if urls_from_env %}text-emerald-400{% else %}text-blue-400{% endif %}"></i> mobile.de Such-URLs (searchPageURLs)
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              Definiert die Abfrage-URL(s) für den Apify-Scraper.
+            </p>
           </div>
-          {% endfor %}
+          
+          {% if urls_from_env %}
+          <span class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-server text-[9px]"></i> Gesteuert über Unraid (ENV)
+          </span>
+          {% else %}
+          <span class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
+            <i class="fa-solid fa-file-code text-[9px]"></i> Gesteuert über config.json
+          </span>
+          {% endif %}
         </div>
+
+        {% if urls_from_env %}
+        <div class="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 text-[11px] text-slate-300 space-y-1">
+          <p class="font-semibold text-emerald-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info"></i> Die URL wird durch die Docker-Umgebungsvariable <code>MOBILE_SEARCH_URLS</code> vorgegeben.
+          </p>
+          <p class="text-slate-400 text-[10px]">
+            Um diese URL anzupassen, bearbeite den Container in der Unraid Docker-Übersicht. Das Webformular dient hier nur als Leseansicht.
+          </p>
+        </div>
+        {% endif %}
+
+        <textarea 
+          name="search_page_urls_text" 
+          rows="4" 
+          placeholder="https://m.mobile.de/fahrzeuge/search.html?..."
+          class="w-full bg-slate-950 font-mono text-xs {% if urls_from_env %}text-emerald-300 cursor-not-allowed opacity-80{% else %}text-blue-300{% endif %} p-3.5 rounded-xl border border-slate-700 outline-none focus:border-blue-500 leading-relaxed scrollbar-thin"
+          {% if urls_from_env %}readonly{% endif %}
+        >{{ active_urls | join('\n') }}</textarea>
+        
+        <p class="text-[11px] text-slate-500">
+          {% if urls_from_env %}
+            Aktive Zeilenanzahl: {{ active_urls | length }} URL(s) im Container geladen.
+          {% else %}
+            Tipp: Eine URL pro Zeile eintragen. Das Speichern aktualisiert die <code>config.json</code>.
+          {% endif %}
+        </p>
       </div>
 
       <!-- Gesuchte Ausstattungsmerkmale (desired_features) -->
@@ -230,7 +192,7 @@
         </div>
       </div>
 
-      <!-- Gewichtungen -->
+      <!-- Score-Gewichtungen -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <i class="fa-solid fa-sliders text-amber-400"></i> Score-Gewichtungen (%)
@@ -299,17 +261,9 @@
 
 </div>
 
-<!-- Sichere Datenübertragung per JSON-Script-Tag (kein Escaping-Fehler im JS) -->
+<!-- Sichere Datenübertragung per JSON-Script-Tag -->
 <script id="serverDesiredFeaturesData" type="application/json">
-{{ config.get('scoring_rules', {}).get('desired_features', [
-    'Matrix LED-Scheinwerfer',
-    'ACC / adaptiver Tempomat',
-    'Head-Up Display',
-    'Massagesitz / ErgoActive',
-    'Apple CarPlay / Android Auto',
-    'Mind. 2-Zonen Klimaautomatik',
-    'Sitzheizung & Lenkradheizung'
-]) | tojson }}
+{{ config.get('scoring_rules', {}).get('desired_features', []) | tojson }}
 </script>
 <script id="serverAliasesData" type="application/json">
 {{ config.get('scoring_rules', {}).get('feature_aliases', {}) | tojson }}
@@ -530,20 +484,6 @@
       syncHiddenInputs();
     }
     input.value = '';
-  }
-
-  function addModelRow() {
-    const container = document.getElementById('modelsContainer');
-    const row = document.createElement('div');
-    row.className = 'model-row flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800';
-    row.innerHTML = `
-      <input type="text" name="model_make" placeholder="Hersteller" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" required>
-      <input type="text" name="model_name" placeholder="Modellreihe" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" required>
-      <button type="button" onclick="this.closest('.model-row').remove()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition flex items-center justify-center">
-        <i class="fa-solid fa-trash text-xs"></i>
-      </button>
-    `;
-    container.appendChild(row);
   }
 
   function switchTab(mode) {

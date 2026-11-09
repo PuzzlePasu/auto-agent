@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from pathlib import Path
@@ -15,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Pfade relativ zur Datei festlegen (verhindert Pfadfehler im Docker-Container)
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 CONFIG_PATH = BASE_DIR.parent.parent / "config.json"
@@ -120,6 +120,15 @@ async def car_details(request: Request, car_id: int):
     days_online = max(1, (datetime.utcnow() - first_dt).days)
     price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
 
+    desired_features = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                desired_features = cfg.get("scoring_rules", {}).get("desired_features", [])
+        except Exception as e:
+            logger.error(f"Fehler beim Laden der desired_features: {e}")
+
     return templates.TemplateResponse(
         request=request,
         name="car_detail.html",
@@ -127,7 +136,8 @@ async def car_details(request: Request, car_id: int):
             "car": car,
             "price_history": price_history,
             "days_online": days_online,
-            "price_metrics": price_metrics
+            "price_metrics": price_metrics,
+            "desired_features": desired_features
         }
     )
 
@@ -138,7 +148,7 @@ async def car_details(request: Request, car_id: int):
 @router.get("/compare", response_class=HTMLResponse)
 async def compare_cars(request: Request, id1: int = Query(None), id2: int = Query(None)):
     all_cars = repo.get_all_cars(only_active=True, canonical_only=True)
-    
+
     car1 = repo.get_car_by_id(id1) if id1 else (all_cars[0] if len(all_cars) > 0 else None)
     car2 = repo.get_car_by_id(id2) if id2 else (all_cars[1] if len(all_cars) > 1 else (all_cars[0] if len(all_cars) > 0 else None))
 
@@ -204,12 +214,30 @@ async def settings_view(request: Request):
             logger.error(f"Fehler beim Laden von config.json: {e}")
             config_raw = f"// Fehler beim Laden der Datei: {e}"
 
+    # Prüfen, ob mobile.de URLs via Docker-Umgebungsvariable vorgegeben sind
+    env_urls_raw = os.getenv("MOBILE_SEARCH_URLS", "").strip()
+    urls_from_env = False
+    active_urls = []
+
+    if env_urls_raw:
+        active_urls = [
+            u.strip() for u in env_urls_raw.replace(";", "\n").replace(",", "\n").splitlines()
+            if u.strip().startswith("http")
+        ]
+        if active_urls:
+            urls_from_env = True
+
+    if not urls_from_env:
+        active_urls = config_dict.get("search_criteria", {}).get("search_page_urls", [])
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
         context={
             "config": config_dict,
             "config_raw": config_raw,
+            "active_urls": active_urls,
+            "urls_from_env": urls_from_env,
             "saved": request.query_params.get("saved") == "true",
             "error": request.query_params.get("error")
         }
@@ -220,16 +248,7 @@ async def settings_view(request: Request):
 async def settings_save(
     request: Request,
     edit_mode: str = Form("fields"),
-    postal_code: str = Form("97271"),
-    city: str = Form("Kleinrinderfeld"),
-    radius_km: int = Form(100),
-    max_price: float = Form(27000),
-    max_mileage: int = Form(80000),
-    min_year: int = Form(2020),
-    min_power_hp: int = Form(150),
-    max_power_hp: int = Form(200),
-    exclude_hybrids: bool = Form(False),
-    exclude_white: bool = Form(False),
+    search_page_urls_text: str = Form(""),
     target_consumption: float = Form(6.2),
     inactivity_runs: int = Form(3),
     weight_market: float = Form(22.0),
@@ -240,8 +259,6 @@ async def settings_save(
     weight_distance: float = Form(10.0),
     weight_age: float = Form(8.0),
     weight_power: float = Form(7.0),
-    model_make: List[str] = Form(default=[]),
-    model_name: List[str] = Form(default=[]),
     desired_features_json: str = Form("[]"),
     feature_aliases_json: str = Form("{}"),
     preferred_colors_json: str = Form("[]"),
@@ -258,35 +275,19 @@ async def settings_save(
                     parsed_data = json.load(f)
 
             crit = parsed_data.setdefault("search_criteria", {})
-            loc = crit.setdefault("location", {})
-            flt = crit.setdefault("filters", {})
             weights = parsed_data.setdefault("scoring_weights", {})
             rules = parsed_data.setdefault("scoring_rules", {})
 
-            # 1. Standort & Umkreis
-            loc["postal_code"] = postal_code.strip()
-            loc["city"] = city.strip()
-            loc["radius_km"] = radius_km
+            # 1. mobile.de Such-URLs aus Textarea speichern (nur wenn nicht schreibgeschützt durch ENV)
+            if not os.getenv("MOBILE_SEARCH_URLS", "").strip():
+                clean_urls = [
+                    line.strip()
+                    for line in search_page_urls_text.splitlines()
+                    if line.strip().startswith("http")
+                ]
+                crit["search_page_urls"] = clean_urls
 
-            # 2. Filter & Ausschlüsse
-            flt["max_price"] = max_price
-            flt["max_mileage"] = max_mileage
-            flt["min_year"] = min_year
-            flt["min_power_hp"] = min_power_hp
-            flt["max_power_hp"] = max_power_hp
-            flt["exclude_hybrids"] = exclude_hybrids
-            flt["exclude_colors"] = ["weiß", "weiss", "white", "oryxweiß", "alpinweiß", "pure white"] if exclude_white else []
-
-            # 3. Modelle
-            updated_models = []
-            for make_val, model_val in zip(model_make, model_name):
-                m_c, n_c = make_val.strip(), model_val.strip()
-                if m_c and n_c:
-                    updated_models.append({"make": m_c, "model": n_c})
-            if updated_models:
-                crit["models"] = updated_models
-
-            # 4. desired_features
+            # 2. desired_features (Basis für 100% Ausstattungs-Score)
             try:
                 parsed_desired = json.loads(desired_features_json)
                 if isinstance(parsed_desired, list):
@@ -294,7 +295,7 @@ async def settings_save(
             except Exception:
                 pass
 
-            # 5. feature_aliases (Synonyme für ACC, Matrix etc.)
+            # 3. feature_aliases (Synonyme für ACC, Matrix LED etc.)
             try:
                 parsed_aliases = json.loads(feature_aliases_json)
                 if isinstance(parsed_aliases, dict):
@@ -302,7 +303,7 @@ async def settings_save(
             except Exception:
                 pass
 
-            # 6. Wunschfarben & Verbrauch
+            # 4. Wunschfarben & Verbrauchs-Target
             try:
                 parsed_colors = json.loads(preferred_colors_json)
                 if isinstance(parsed_colors, list):
@@ -313,7 +314,7 @@ async def settings_save(
             rules["target_consumption_l100km"] = target_consumption
             rules["inactivity_threshold_runs"] = inactivity_runs
 
-            # 7. Gewichte
+            # 5. Score-Gewichtungen
             weights["market_price"] = weight_market / 100.0
             weights["features"] = weight_features / 100.0
             weights["consumption"] = weight_consumption / 100.0
@@ -323,11 +324,10 @@ async def settings_save(
             weights["age"] = weight_age / 100.0
             weights["power"] = weight_power / 100.0
 
-        # In config.json schreiben
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(parsed_data, f, indent=2, ensure_ascii=False)
 
-        # Alle gespeicherten Autos sofort mit den neuen Kriterien offline neu bewerten
+        # Alle Bestandsfahrzeuge direkt mit den neuen Kriterien offline neu bewerten
         search_service.rescore_all_listings()
 
         if run_search_after:
