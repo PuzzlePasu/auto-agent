@@ -127,15 +127,30 @@ class ApifyProvider:
 
         try:
             run = self.client.actor(self.actor_id).call(run_input=run_input)
-            dataset_id = run.get("defaultDatasetId")
+
+            # Unterstützt sowohl neuere Pydantic-Objekte ('Run') als auch Dict-Antworten
+            dataset_id = getattr(run, "default_dataset_id", None) or getattr(run, "defaultDatasetId", None)
+            if not dataset_id and isinstance(run, dict):
+                dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
+
             if not dataset_id:
-                logger.error("Apify Actor lieferte keine defaultDatasetId zurück.")
+                logger.error(f"Apify Actor lieferte keine defaultDatasetId zurück. Typ von run: {type(run)}")
                 return []
 
             dataset_client = self.client.dataset(dataset_id)
             listings: List[CarListing] = []
 
-            for item in dataset_client.iterate_items():
+            for raw_item in dataset_client.iterate_items():
+                # Sichere Konvertierung in Dict, falls Items Pydantic-Modelle sind
+                if hasattr(raw_item, "model_dump"):
+                    item = raw_item.model_dump()
+                elif hasattr(raw_item, "dict"):
+                    item = raw_item.dict()
+                elif isinstance(raw_item, dict):
+                    item = raw_item
+                else:
+                    item = dict(raw_item)
+
                 car = self._map_to_car_listing(item)
                 if car:
                     listings.append(car)
