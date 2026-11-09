@@ -116,25 +116,61 @@ async def car_details(request: Request, car_id: int):
         return HTMLResponse(content="Fahrzeug nicht gefunden", status_code=404)
 
     price_history = repo.get_price_history(car_id)
-    first_dt = datetime.strptime(car.first_seen, "%Y-%m-%d %H:%M:%S") if car.first_seen else datetime.utcnow()
+
+    # 1. first_seen fehlertolerant parsen
+    first_dt = datetime.utcnow()
+    if car.first_seen:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                first_dt = datetime.strptime(str(car.first_seen).split(".")[0], fmt)
+                break
+            except ValueError:
+                continue
+
     days_online = max(1, (datetime.utcnow() - first_dt).days)
-    price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
-    
-# Falls car.market_stats nicht existiert oder None ist:
-     if not getattr(car, "market_stats", None):
-            car.market_stats = {
-                "median_price": car.price,
-                "difference": 0.0,
-                "total_comparable": 0
-            }
+
+    # 2. Preiskennzahlen berechnen
+    if hasattr(search_service, "price_service") and search_service.price_service:
+        price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
+    else:
+        price_metrics = {
+            "initial_price": car.price,
+            "lowest_price": car.price,
+            "highest_price": car.price,
+            "price_drop_amount": 0.0,
+            "price_drop_percent": 0.0,
+            "has_dropped": False,
+            "history_points": []
+        }
+
+    # 3. Marktdaten-Fallback absichern
+    if not getattr(car, "market_stats", None):
+        car.market_stats = {
+            "median_price": car.price,
+            "difference": 0.0,
+            "total_comparable": 0
+        }
+
+    # 4. Ausstattungs-Regeln aus config.json laden
     desired_features = []
+    feature_aliases = {}
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
                 desired_features = cfg.get("scoring_rules", {}).get("desired_features", [])
+                feature_aliases = cfg.get("scoring_rules", {}).get("feature_aliases", {})
         except Exception as e:
-            logger.error(f"Fehler beim Laden der desired_features: {e}")
+            logger.error(f"Fehler beim Laden von config.json in car_details: {e}")
+
+    # 5. Features als Liste absichern
+    if isinstance(car.features, str):
+        try:
+            car.features = json.loads(car.features)
+        except Exception:
+            car.features = [f.strip() for f in car.features.split(",") if f.strip()]
+    elif not isinstance(car.features, list):
+        car.features = []
 
     return templates.TemplateResponse(
         request=request,
@@ -144,7 +180,8 @@ async def car_details(request: Request, car_id: int):
             "price_history": price_history,
             "days_online": days_online,
             "price_metrics": price_metrics,
-            "desired_features": desired_features
+            "desired_features": desired_features,
+            "feature_aliases": feature_aliases
         }
     )
 
@@ -221,7 +258,6 @@ async def settings_view(request: Request):
             logger.error(f"Fehler beim Laden von config.json: {e}")
             config_raw = f"// Fehler beim Laden der Datei: {e}"
 
-    # Prüfen, ob mobile.de URLs via Docker-Umgebungsvariable vorgegeben sind
     env_urls_raw = os.getenv("MOBILE_SEARCH_URLS", "").strip()
     urls_from_env = False
     active_urls = []
@@ -285,7 +321,6 @@ async def settings_save(
             weights = parsed_data.setdefault("scoring_weights", {})
             rules = parsed_data.setdefault("scoring_rules", {})
 
-            # 1. mobile.de Such-URLs aus Textarea speichern (nur wenn nicht schreibgeschützt durch ENV)
             if not os.getenv("MOBILE_SEARCH_URLS", "").strip():
                 clean_urls = [
                     line.strip()
@@ -294,7 +329,6 @@ async def settings_save(
                 ]
                 crit["search_page_urls"] = clean_urls
 
-            # 2. desired_features (Basis für 100% Ausstattungs-Score)
             try:
                 parsed_desired = json.loads(desired_features_json)
                 if isinstance(parsed_desired, list):
@@ -302,7 +336,6 @@ async def settings_save(
             except Exception:
                 pass
 
-            # 3. feature_aliases (Synonyme für ACC, Matrix LED etc.)
             try:
                 parsed_aliases = json.loads(feature_aliases_json)
                 if isinstance(parsed_aliases, dict):
@@ -310,7 +343,6 @@ async def settings_save(
             except Exception:
                 pass
 
-            # 4. Wunschfarben & Verbrauchs-Target
             try:
                 parsed_colors = json.loads(preferred_colors_json)
                 if isinstance(parsed_colors, list):
@@ -321,7 +353,6 @@ async def settings_save(
             rules["target_consumption_l100km"] = target_consumption
             rules["inactivity_threshold_runs"] = inactivity_runs
 
-            # 5. Score-Gewichtungen
             weights["market_price"] = weight_market / 100.0
             weights["features"] = weight_features / 100.0
             weights["consumption"] = weight_consumption / 100.0
@@ -334,7 +365,6 @@ async def settings_save(
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(parsed_data, f, indent=2, ensure_ascii=False)
 
-        # Alle Bestandsfahrzeuge direkt mit den neuen Kriterien offline neu bewerten
         search_service.rescore_all_listings()
 
         if run_search_after:
@@ -361,9 +391,30 @@ async def download_car_pdf(car_id: int):
         return HTMLResponse(content="Fahrzeug nicht gefunden", status_code=404)
 
     price_history = repo.get_price_history(car_id)
-    first_dt = datetime.strptime(car.first_seen, "%Y-%m-%d %H:%M:%S") if car.first_seen else datetime.utcnow()
+
+    first_dt = datetime.utcnow()
+    if car.first_seen:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                first_dt = datetime.strptime(str(car.first_seen).split(".")[0], fmt)
+                break
+            except ValueError:
+                continue
+
     days_online = max(1, (datetime.utcnow() - first_dt).days)
-    price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
+
+    if hasattr(search_service, "price_service") and search_service.price_service:
+        price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
+    else:
+        price_metrics = {
+            "initial_price": car.price,
+            "lowest_price": car.price,
+            "highest_price": car.price,
+            "price_drop_amount": 0.0,
+            "price_drop_percent": 0.0,
+            "has_dropped": False,
+            "history_points": []
+        }
 
     pdf_bytes = PdfExportService.generate_car_report(car, price_metrics, days_online)
 
