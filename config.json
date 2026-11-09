@@ -15,140 +15,58 @@
     "color_preference": 0.05
   },
   "scoring_rules": {
-    "inactivity_threshold_runs": 3,
-    "target_consumption_l100km": 6.2,
-    "preferred_colors": [
-      "blau",
-      "blue",
-      "rot",
-      "red",
-      "anemonenblau",
-      "lapizblau",
-      "misanorot",
-      "tarragonarot",
-      "navarrablau",
-      "sunset red",
-      "misano blau",
-      "snapper rocks blue"
-    ],
     "desired_features": [
-      "Matrix LED-Scheinwerfer",
-      "ACC / adaptiver Tempomat",
+      "LED Scheinwerfer / Matrix LED",
+      "Abstandstempomat / ACC",
       "Head-Up Display",
-      "Massagesitz / ErgoActive",
-      "Apple CarPlay / Android Auto",
-      "Mind. 2-Zonen Klimaautomatik",
-      "Sitzheizung & Lenkradheizung"
+      "Sportsitze / ErgoActive",
+      "Navigationssystem",
+      "Rückfahrkamera / 360 Kamera",
+      "Sitzheizung",
+      "Spurhalteassistent / Lane Assist",
+      "Totwinkel-Assistent",
+      "Panoramadach / Schiebedach",
+      "Digital Cockpit"
     ],
     "feature_aliases": {
-      "Matrix LED-Scheinwerfer": [
-        "matrix",
-        "iq.light",
-        "iq light",
-        "adaptive led",
-        "adaptiver led-scheinwerfer",
-        "dynamic light assist",
-        "fernlichtassistent",
-        "laserlicht",
-        "multibeam",
-        "voll-led"
+      "LED Scheinwerfer / Matrix LED": [
+        "led", "matrix", "iq.light", "laser", "scheinwerfer led", 
+        "led headlights", "headlights led", "adaptive lighting"
       ],
-      "ACC / adaptiver Tempomat": [
-        "acc",
-        "travel assist",
-        "iq.drive",
-        "abstandstempomat",
-        "active cruise control",
-        "driving assistant",
-        "stop&go",
-        "automatische distanzregelung",
-        "pcc"
+      "Abstandstempomat / ACC": [
+        "acc", "abstand", "adaptiv", "distronic", "travel assist", "tempomat",
+        "adaptive cruise control", "distance warning", "cruise control"
       ],
       "Head-Up Display": [
-        "head-up",
-        "head up",
-        "hud",
-        "headup",
-        "innovationspaket",
-        "projektionsdisplay"
+        "head-up", "headup", "hud", "head up display"
       ],
-      "Massagesitz / ErgoActive": [
-        "ergoactive",
-        "ergo-active",
-        "massage",
-        "massagesitz",
-        "massagefunktion",
-        "aktivsitz",
-        "lordosenstütze",
-        "lordose",
-        "sportsitze",
-        "m sportsitze"
+      "Sportsitze / ErgoActive": [
+        "sport", "ergo", "massage", "lordose", "sportsitz",
+        "sport seats", "massage seats", "lumbar support"
       ],
-      "Parkassistent / Kamera": [
-        "park assist",
-        "parklenkassistent",
-        "rear view",
-        "parking assistant",
-        "rückfahrkamera",
-        "rückfahr-assistent",
-        "surround view",
-        "360 grad",
-        "umgebungskamera"
+      "Navigationssystem": [
+        "navi", "navigation", "discover", "virtual cockpit", "gps",
+        "navigation system", "multimedia system"
       ],
-      "Apple CarPlay / Android Auto": [
-        "carplay",
-        "android auto",
-        "app-connect",
-        "wireless carplay",
-        "connected package professional",
-        "live cockpit professional",
-        "discover pro",
-        "smartphone interface",
-        "smartlink"
+      "Rückfahrkamera / 360 Kamera": [
+        "kamera", "rear view", "360", "surround", "area view", "rückfahr",
+        "backup camera", "rear view camera", "reversing camera", "surround view"
       ],
-      "Kabelloses Smartphone-Laden": [
-        "induktion",
-        "wireless charging",
-        "kabellos laden",
-        "induktionsladen",
-        "telefonie mit wireless charging",
-        "ablage für kabelloses laden"
+      "Sitzheizung": [
+        "sitzheizung", "heated seats", "seat heating", "front seat heating"
       ],
-      "Soundsystem": [
-        "harman kardon",
-        "harman/kardon",
-        "hifi-lautsprechersystem",
-        "soundsystem",
-        "beats audio",
-        "canton"
+      "Spurhalteassistent / Lane Assist": [
+        "lane assist", "spurhalte", "spurassistent", "lane keeping assist"
       ],
-      "Adaptives Fahrwerk": [
-        "dcc",
-        "adaptive fahrwerksregelung",
-        "adaptives fahrwerk",
-        "m sportfahrwerk",
-        "sportfahrwerk",
-        "fahrdynamikregelung"
+      "Totwinkel-Assistent": [
+        "totwinkel", "side assist", "blind spot", "blind spot monitor"
       ],
-      "Mind. 2-Zonen Klimaautomatik": [
-        "climatronic",
-        "3-zonen",
-        "2-zonen",
-        "klimaautomatik mit 2-zonen",
-        "klimaautomatik mit erweiterter umfänge"
+      "Panoramadach / Schiebedach": [
+        "panoramadach", "schiebedach", "panoramadach / schiebedach",
+        "sunroof", "panoramic roof", "panoramic glass roof", "sliding roof"
       ],
-      "Sitzheizung & Lenkradheizung": [
-        "sitzheizung",
-        "lenkradheizung",
-        "beheizbares lenkrad",
-        "winterpaket"
-      ],
-      "Leichtmetallfelgen 18/19 Zoll": [
-        "18 zoll",
-        "19 zoll",
-        "18\"",
-        "19\"",
-        "leichtmetallräder"
+      "Digital Cockpit": [
+        "digital cockpit", "virtual cockpit", "kombiinstrument digital", "fully digital instrument cluster"
       ]
     }
   }

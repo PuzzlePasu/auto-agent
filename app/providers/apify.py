@@ -10,11 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_mobile_url(url: str) -> str:
-    """Bereinigt mobile.de-Such-URLs für den Apify-Actor."""
+    """
+    Bereinigt und normalisiert mobile.de-Such-URLs für den Apify-Actor:
+    - Schreibt m.mobile.de auf suchen.mobile.de um
+    - Erzwingt immer den deutschen Sprachparameter &lang=de
+    - Entfernt flüchtige Tracking- und Session-Parameter (ref, refId, ssid), die den Parser stören
+    - Normalisiert Erstzulassungsparameter (z. B. '2025' oder '1-2025' -> '2025:')
+    - Behebt Encoding-Probleme bei Ortsnamen/Umlauten im gn-Parameter
+    """
     clean_url = url.strip()
     if not clean_url:
         return ""
 
+    # 1. Hostname vereinheitlichen
     clean_url = clean_url.replace("https://m.mobile.de/", "https://suchen.mobile.de/")
     clean_url = clean_url.replace("http://m.mobile.de/", "https://suchen.mobile.de/")
     clean_url = clean_url.replace("https://mobile.de/", "https://suchen.mobile.de/")
@@ -24,10 +32,15 @@ def sanitize_mobile_url(url: str) -> str:
         parsed = urlparse(clean_url)
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
+        # 2. Sprache explizit auf Deutsch festlegen (gegen englische Ausstattungsbegriffe)
+        qs["lang"] = ["de"]
+
+        # 3. Tracking- & Session-Keys entfernen
         volatile_keys = ["ref", "refId", "ssid", "searchId", "sorting.direction"]
         for k in volatile_keys:
             qs.pop(k, None)
 
+        # 4. Erstzulassung formatieren: z. B. '2025' oder '1-2025' wird '2025:'
         if "fr" in qs:
             normalized_fr = []
             for val in qs["fr"]:
@@ -37,6 +50,7 @@ def sanitize_mobile_url(url: str) -> str:
                 normalized_fr.append(cleaned_val)
             qs["fr"] = normalized_fr
 
+        # 5. Falls gn (Ortsname mit Umlauten/Komma) vorhanden ist, PLZ in zip auslagern
         if "gn" in qs:
             gn_val = qs.pop("gn", [""])[0]
             plz_match = re.search(r"\b(\d{5})\b", gn_val)
@@ -119,7 +133,8 @@ class ApifyProvider:
         run_input = {
             "automaticPaging": True,
             "searchCategory": "Car",
-            "searchPageURLs": urls
+            "searchPageURLs": urls,
+            "language": "de"
         }
 
         logger.info(f"Starte Apify-Actor '{self.actor_id}' mit {len(urls)} URL(s)...")
@@ -164,14 +179,14 @@ class ApifyProvider:
             ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
             title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
 
-            # Preis parsen
+            # 1. Preis parsen
             raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
             price = self._extract_float(raw_price, default=0.0)
 
             if price <= 500:
                 return None
 
-            # Kilometerstand
+            # 2. Kilometerstand parsen
             raw_mileage = item.get("mileage") or item.get("mileageInKm") or item.get("kilometers") or 0
             if isinstance(raw_mileage, dict):
                 raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
@@ -181,7 +196,7 @@ class ApifyProvider:
             else:
                 mileage = int(raw_mileage or 0)
 
-            # Erstzulassung
+            # 3. Erstzulassung parsen
             raw_year = item.get("firstRegistration") or item.get("year") or 2020
             if isinstance(raw_year, dict):
                 raw_year = raw_year.get("year") or raw_year.get("value") or 2020
@@ -191,7 +206,7 @@ class ApifyProvider:
             else:
                 year = int(raw_year or 2020)
 
-            # Leistung (PS)
+            # 4. Leistung in PS
             raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
             if isinstance(raw_power, dict):
                 raw_power = raw_power.get("hp") or raw_power.get("powerHp") or raw_power.get("value") or 150
@@ -205,11 +220,11 @@ class ApifyProvider:
             else:
                 power_hp = int(raw_power or 150)
 
-            # Distanz
+            # 5. Distanz
             raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
             distance_km = self._extract_float(raw_dist, default=25.0)
 
-            # Ausstattungen
+            # 6. Ausstattungsmerkmale extrahieren
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
             if isinstance(raw_features, str):
                 features = [f.strip() for f in raw_features.split(",") if f.strip()]
@@ -218,6 +233,19 @@ class ApifyProvider:
             else:
                 features = []
 
+            # 7. Bild-URLs robust extrahieren (Array oder Einzelstring)
+            image_url = ""
+            raw_images = item.get("images") or item.get("imageUrls") or item.get("photos") or []
+            if isinstance(raw_images, list) and len(raw_images) > 0:
+                first_img = raw_images[0]
+                image_url = first_img if isinstance(first_img, str) else first_img.get("url", "")
+            elif isinstance(raw_images, str):
+                image_url = raw_images
+
+            if not image_url:
+                image_url = str(item.get("thumbnail") or item.get("imageUrl") or item.get("image") or "")
+
+            # 8. Hersteller und Modell ableiten
             make = item.get("make")
             model = item.get("model")
             if not make:
@@ -229,7 +257,7 @@ class ApifyProvider:
 
             url = item.get("url") or item.get("adUrl") or item.get("link") or ""
 
-            return CarListing(
+            car = CarListing(
                 id=None,
                 external_id=ext_id,
                 provider="mobile.de",
@@ -250,6 +278,11 @@ class ApifyProvider:
                 features=features,
                 deal_score=0.0
             )
+
+            # Attribut für Bild dynamisch setzen (wird in DB-Spalte image_url persistiert)
+            setattr(car, "image_url", image_url)
+            return car
+
         except Exception as e:
             logger.warning(f"Konnte Inserat-Eintrag nicht mappen: {e}")
             return None

@@ -63,7 +63,7 @@
       <div class="glass-card rounded-2xl overflow-hidden border border-slate-800 hover:border-blue-500/50 transition-all flex flex-col justify-between group">
         <div>
           <div class="relative h-44 overflow-hidden bg-slate-800">
-            <img src="{{ deal.image_url }}" alt="{{ deal.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            <img src="{{ deal.image_url }}" alt="{{ deal.title }}" referrerpolicy="no-referrer" loading="lazy" cclass="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
             <div class="absolute top-3 left-3 bg-slate-900/90 backdrop-blur px-2.5 py-1 rounded-md text-xs font-semibold text-slate-200 border border-slate-700">
               {{ deal.provider }}
             </div>
@@ -210,7 +210,7 @@
     {% for car in cars %}
     <div class="glass-card rounded-2xl p-5 border border-slate-800 hover:border-slate-700 transition flex flex-col md:flex-row gap-5 items-stretch relative">
       <div class="w-full md:w-56 h-40 rounded-xl overflow-hidden bg-slate-800 flex-shrink-0 relative">
-        <img src="{{ car.image_url }}" alt="{{ car.title }}" class="w-full h-full object-cover">
+        <img src="{{ car.image_url }}" alt="{{ car.title }}" referrerpolicy="no-referrer" loading="lazy" class="w-full h-full object-cover">
         <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-900/90 text-slate-300 border border-slate-700">
           {{ car.provider }}
         </span>

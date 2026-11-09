@@ -26,76 +26,99 @@
     </div>
   </div>
 
-  <!-- Haupt-Header Card -->
-  <div class="glass-card rounded-2xl p-6 border border-slate-800 relative overflow-hidden">
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+  <!-- Hero Header Card mit Fahrzeugbild -->
+  <div class="glass-card rounded-2xl border border-slate-800 overflow-hidden">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-0">
       
-      <!-- Fahrzeugdaten Titel & Tags -->
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide uppercase">
-            {{ car.provider }}
-          </span>
-          {% if car.is_favorite %}
-          <span class="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-1">
-            <i class="fa-solid fa-star text-[10px]"></i> Favorit
-          </span>
-          {% endif %}
-          {% if car.is_active %}
-          <span class="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold flex items-center gap-1">
-            <i class="fa-solid fa-circle-check text-[10px]"></i> Aktiv
-          </span>
-          {% else %}
-          <span class="px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[11px] font-bold flex items-center gap-1">
-            <i class="fa-solid fa-circle-xmark text-[10px]"></i> Inaktiv
-          </span>
-          {% endif %}
-          <span class="text-xs text-slate-400 flex items-center gap-1 ml-1">
-            <i class="fa-regular fa-clock"></i> Seit {{ days_online|default(1) }} Tag(en) getrackt
-          </span>
+      <!-- Bild-Bereich (links auf Desktop) -->
+      <div class="md:col-span-5 lg:col-span-4 bg-slate-950/60 relative min-h-[220px] flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-800 overflow-hidden">
+        {% if car.image_url %}
+        <img 
+          src="{{ car.image_url }}" 
+          alt="{{ car.title }}" 
+          referrerpolicy="no-referrer" 
+          loading="lazy" 
+          class="w-full h-full object-cover max-h-[300px] hover:scale-105 transition duration-500"
+          onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'flex flex-col items-center justify-center p-8 text-slate-600\'><i class=\'fa-solid fa-car text-4xl mb-2\'></i><span class=\'text-xs\'>Kein Bild verfügbar</span></div>';"
+        />
+        {% else %}
+        <div class="flex flex-col items-center justify-center p-8 text-slate-600">
+          <i class="fa-solid fa-car text-4xl mb-2"></i>
+          <span class="text-xs">Kein Bild erfasst</span>
         </div>
-
-        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          {{ car.title }}
-        </h1>
-
-        <p class="text-xs text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span><i class="fa-solid fa-building text-slate-500 mr-1"></i>{{ car.dealer_name|default('Händler') }}</span>
-          <span><i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>{{ car.postal_code|default('97271') }} {{ car.city|default('Würzburg') }} (ca. {{ car.distance_km|round(1)|default(25.0) }} km)</span>
-          <span><i class="fa-solid fa-fingerprint text-slate-500 mr-1"></i>ID: {{ car.external_id }}</span>
-        </p>
+        {% endif %}
       </div>
 
-      <!-- Preis & Deal Score Widget -->
-      <div class="flex items-center gap-4 self-start lg:self-auto">
-        <div class="text-right">
-          <div class="text-3xl font-black text-white">
-            {{ "{:,.0f}".format(car.price|default(0)).replace(",", ".") }} €
+      <!-- Fahrzeug-Stammdaten & Score (rechts auf Desktop) -->
+      <div class="md:col-span-7 lg:col-span-8 p-6 flex flex-col justify-between space-y-4">
+        
+        <div>
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <span class="px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-bold tracking-wide uppercase">
+              {{ car.provider }}
+            </span>
+            {% if car.is_favorite %}
+            <span class="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-1">
+              <i class="fa-solid fa-star text-[10px]"></i> Favorit
+            </span>
+            {% endif %}
+            {% if car.is_active %}
+            <span class="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold flex items-center gap-1">
+              <i class="fa-solid fa-circle-check text-[10px]"></i> Aktiv
+            </span>
+            {% else %}
+            <span class="px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[11px] font-bold flex items-center gap-1">
+              <i class="fa-solid fa-circle-xmark text-[10px]"></i> Inaktiv
+            </span>
+            {% endif %}
+            <span class="text-xs text-slate-400 flex items-center gap-1 ml-1">
+              <i class="fa-regular fa-clock"></i> Seit {{ days_online|default(1) }} Tag(en)
+            </span>
           </div>
-          {% if price_metrics and price_metrics.has_dropped %}
-          <div class="text-xs font-bold text-emerald-400 flex items-center justify-end gap-1 mt-0.5">
-            <i class="fa-solid fa-arrow-trend-down"></i>
-            <span>-{{ "{:,.0f}".format(price_metrics.price_drop_amount|default(0)).replace(",", ".") }} € (-{{ price_metrics.price_drop_percent|default(0) }}%)</span>
-          </div>
-          {% else %}
-          <div class="text-[11px] text-slate-500 mt-0.5">Startpreis stabil</div>
-          {% endif %}
+
+          <h1 class="text-2xl font-black text-white tracking-tight leading-snug">
+            {{ car.title }}
+          </h1>
+
+          <p class="text-xs text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+            <span><i class="fa-solid fa-building text-slate-500 mr-1"></i>{{ car.dealer_name|default('Händler') }}</span>
+            <span><i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>{{ car.postal_code|default('97271') }} {{ car.city|default('Würzburg') }} (ca. {{ car.distance_km|round(1)|default(25.0) }} km)</span>
+            <span><i class="fa-solid fa-fingerprint text-slate-500 mr-1"></i>ID: {{ car.external_id }}</span>
+          </p>
         </div>
 
-        <!-- Deal Score Badge -->
-        <div class="w-16 h-16 rounded-2xl flex flex-col items-center justify-center border font-black shadow-lg
-          {% if car.deal_score >= 80 %}
-            bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10
-          {% elif car.deal_score >= 65 %}
-            bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-blue-500/10
-          {% elif car.deal_score >= 50 %}
-            bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-amber-500/10
-          {% else %}
-            bg-slate-800 border-slate-700 text-slate-400
-          {% endif %}">
-          <span class="text-xl leading-none">{{ car.deal_score|round|int }}</span>
-          <span class="text-[9px] font-bold uppercase tracking-wider opacity-80 mt-0.5">Score</span>
+        <!-- Preis & Score Leiste -->
+        <div class="flex items-center justify-between pt-4 border-t border-slate-800/80">
+          <div>
+            <div class="text-3xl font-black text-white">
+              {{ "{:,.0f}".format(car.price|default(0)).replace(",", ".") }} €
+            </div>
+            {% if price_metrics and price_metrics.has_dropped %}
+            <div class="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+              <i class="fa-solid fa-arrow-trend-down"></i>
+              <span>-{{ "{:,.0f}".format(price_metrics.price_drop_amount|default(0)).replace(",", ".") }} € (-{{ price_metrics.price_drop_percent|default(0) }}%)</span>
+            </div>
+            {% else %}
+            <div class="text-[11px] text-slate-500 mt-0.5">Startpreis unverändert</div>
+            {% endif %}
+          </div>
+
+          <!-- Deal Score Badge -->
+          <div class="w-16 h-16 rounded-2xl flex flex-col items-center justify-center border font-black shadow-lg
+            {% if car.deal_score >= 80 %}
+              bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10
+            {% elif car.deal_score >= 65 %}
+              bg-blue-500/20 border-blue-500/40 text-blue-300 shadow-blue-500/10
+            {% elif car.deal_score >= 50 %}
+              bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-amber-500/10
+            {% else %}
+              bg-slate-800 border-slate-700 text-slate-400
+            {% endif %}">
+            <span class="text-xl leading-none">{{ car.deal_score|round|int }}</span>
+            <span class="text-[9px] font-bold uppercase tracking-wider opacity-80 mt-0.5">Score</span>
+          </div>
         </div>
+
       </div>
 
     </div>
@@ -132,10 +155,10 @@
   <!-- Zwei-Spalten-Layout: Details & Ausstattungsabgleich -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- Linke Spalte (2 Spalten): Preishistorie & Features -->
+    <!-- Linke Spalte: Ausstattungsabgleich & Tags -->
     <div class="lg:col-span-2 space-y-6">
 
-      <!-- Ziel-Ausstattungen Abgleich (Checkliste) -->
+      <!-- Ziel-Ausstattungen Checkliste -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-4">
         <div>
           <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -152,7 +175,6 @@
             {% set feat_lower = feat|lower %}
             {% set matched = false %}
             
-            {# Direkter Namenscheck in Titel oder Features #}
             {% if feat_lower in car.title|lower %}
               {% set matched = true %}
             {% else %}
@@ -163,7 +185,6 @@
               {% endfor %}
             {% endif %}
 
-            {# Falls feature_aliases übergeben wurden #}
             {% if not matched and feature_aliases and feat in feature_aliases %}
               {% for syn in feature_aliases[feat] %}
                 {% if syn|lower in car.title|lower %}
@@ -194,7 +215,7 @@
         {% endif %}
       </div>
 
-      <!-- Vollständige Ausstattungsmerkmale (Tags) -->
+      <!-- Vollständige Ausstattungsmerkmale Tags -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <i class="fa-solid fa-tags text-blue-400"></i> Alle erkannten Ausstattungsmerkmale ({{ car.features|length }})
@@ -240,7 +261,7 @@
         {% endif %}
       </div>
 
-      <!-- Markt-Statistik Card (Geschützt gegen Undefined) -->
+      <!-- Markt-Statistik Card -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <i class="fa-solid fa-chart-line text-emerald-400"></i> Marktpreis-Einordnung
@@ -293,7 +314,7 @@
         </div>
       </div>
 
-      <!-- Quick Actions Card -->
+      <!-- Quick Actions -->
       <div class="glass-card rounded-2xl p-6 border border-slate-800 space-y-3">
         <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <i class="fa-solid fa-bolt text-amber-400"></i> Aktionen
