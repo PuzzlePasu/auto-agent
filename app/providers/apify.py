@@ -179,15 +179,20 @@ class ApifyProvider:
             ext_id = str(item.get("id") or item.get("adId") or item.get("articleId") or hash(item.get("url", "")))
             title = str(item.get("title") or f"{item.get('make', '')} {item.get('model', '')}".strip() or "Unbekanntes Fahrzeug")
 
-            # 1. Preis parsen
+            # 1. Preis
             raw_price = item.get("price") or item.get("priceGross") or item.get("priceAmount") or 0
             price = self._extract_float(raw_price, default=0.0)
-
             if price <= 500:
                 return None
 
-            # 2. Kilometerstand parsen
-            raw_mileage = item.get("mileage") or item.get("mileageInKm") or item.get("kilometers") or 0
+            # 2. Kilometerstand (prüft alle Scraper-Varianten)
+            raw_mileage = (
+                item.get("mileageInKm")
+                or item.get("mileage")
+                or item.get("kilometers")
+                or item.get("mileageValue")
+                or 0
+            )
             if isinstance(raw_mileage, dict):
                 raw_mileage = raw_mileage.get("value") or raw_mileage.get("amount") or 0
             if isinstance(raw_mileage, str):
@@ -196,20 +201,21 @@ class ApifyProvider:
             else:
                 mileage = int(raw_mileage or 0)
 
-            # 3. Erstzulassung parsen
-            raw_year = item.get("firstRegistration") or item.get("year") or 2020
-            if isinstance(raw_year, dict):
-                raw_year = raw_year.get("year") or raw_year.get("value") or 2020
-            if isinstance(raw_year, str):
-                year_match = re.search(r"\b(19\d\d|20\d\d)\b", raw_year)
-                year = int(year_match.group(1)) if year_match else 2020
-            else:
-                year = int(raw_year or 2020)
+            # 3. Erstzulassung (sucht nach 4-stelliger Jahreszahl, z. B. '05/2025' -> 2025)
+            raw_year_str = str(
+                item.get("firstRegistration")
+                or item.get("registrationDate")
+                or item.get("firstRegistrationDate")
+                or item.get("year")
+                or ""
+            )
+            year_match = re.search(r"\b(20\d\d|19\d\d)\b", raw_year_str)
+            year = int(year_match.group(1)) if year_match else 2024
 
-            # 4. Leistung in PS
+            # 4. Leistung (PS)
             raw_power = item.get("power") or item.get("powerHp") or item.get("hp") or 150
             if isinstance(raw_power, dict):
-                raw_power = raw_power.get("hp") or raw_power.get("powerHp") or raw_power.get("value") or 150
+                raw_power = raw_power.get("hp") or raw_power.get("powerHp") or 150
             if isinstance(raw_power, str):
                 ps_match = re.search(r"(\d+)\s*ps", raw_power, re.IGNORECASE)
                 if ps_match:
@@ -224,16 +230,22 @@ class ApifyProvider:
             raw_dist = item.get("distance") or item.get("distanceInKm") or 25.0
             distance_km = self._extract_float(raw_dist, default=25.0)
 
-            # 6. Ausstattungsmerkmale extrahieren
+            # 6. Ausstattungsmerkmale (flacht auch Kategorien/Objekte ab)
             raw_features = item.get("features") or item.get("attributes") or item.get("equipment") or []
+            features = []
             if isinstance(raw_features, str):
                 features = [f.strip() for f in raw_features.split(",") if f.strip()]
             elif isinstance(raw_features, list):
-                features = [str(f).strip() for f in raw_features if str(f).strip()]
-            else:
-                features = []
+                for f in raw_features:
+                    if isinstance(f, str) and f.strip():
+                        features.append(f.strip())
+                    elif isinstance(f, dict):
+                        # Falls Attribute als {"name": "...", "value": "..."} vorliegen
+                        val = f.get("label") or f.get("name") or f.get("value")
+                        if val:
+                            features.append(str(val).strip())
 
-            # 7. Bild-URLs robust extrahieren (Array oder Einzelstring)
+            # 7. Bild-URL
             image_url = ""
             raw_images = item.get("images") or item.get("imageUrls") or item.get("photos") or []
             if isinstance(raw_images, list) and len(raw_images) > 0:
@@ -245,7 +257,6 @@ class ApifyProvider:
             if not image_url:
                 image_url = str(item.get("thumbnail") or item.get("imageUrl") or item.get("image") or "")
 
-            # 8. Hersteller und Modell ableiten
             make = item.get("make")
             model = item.get("model")
             if not make:
@@ -278,11 +289,8 @@ class ApifyProvider:
                 features=features,
                 deal_score=0.0
             )
-
-            # Attribut für Bild dynamisch setzen (wird in DB-Spalte image_url persistiert)
             setattr(car, "image_url", image_url)
             return car
-
         except Exception as e:
             logger.warning(f"Konnte Inserat-Eintrag nicht mappen: {e}")
             return None

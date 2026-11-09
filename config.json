@@ -30,27 +30,22 @@
     ],
     "feature_aliases": {
       "LED Scheinwerfer / Matrix LED": [
-        "led", "matrix", "iq.light", "laser", "scheinwerfer led", 
-        "led headlights", "headlights led", "adaptive lighting"
+        "led", "matrix", "iq.light", "laser", "led headlights", "headlights led", "adaptive lighting"
       ],
       "Abstandstempomat / ACC": [
-        "acc", "abstand", "adaptiv", "distronic", "travel assist", "tempomat",
-        "adaptive cruise control", "distance warning", "cruise control"
+        "acc", "abstand", "adaptiv", "distronic", "travel assist", "adaptive cruise control", "distance warning system", "cruise control"
       ],
       "Head-Up Display": [
-        "head-up", "headup", "hud", "head up display"
+        "head-up", "headup", "hud", "head up display", "head-up display"
       ],
       "Sportsitze / ErgoActive": [
-        "sport", "ergo", "massage", "lordose", "sportsitz",
-        "sport seats", "massage seats", "lumbar support"
+        "sport", "ergo", "massage", "lordose", "sportsitz", "sport seats", "massage seats", "lumbar support"
       ],
       "Navigationssystem": [
-        "navi", "navigation", "discover", "virtual cockpit", "gps",
-        "navigation system", "multimedia system"
+        "navi", "navigation", "discover", "gps", "navigation system"
       ],
       "Rückfahrkamera / 360 Kamera": [
-        "kamera", "rear view", "360", "surround", "area view", "rückfahr",
-        "backup camera", "rear view camera", "reversing camera", "surround view"
+        "kamera", "rear view", "360", "surround", "area view", "rückfahr", "backup camera", "reversing camera"
       ],
       "Sitzheizung": [
         "sitzheizung", "heated seats", "seat heating", "front seat heating"
@@ -62,11 +57,10 @@
         "totwinkel", "side assist", "blind spot", "blind spot monitor"
       ],
       "Panoramadach / Schiebedach": [
-        "panoramadach", "schiebedach", "panoramadach / schiebedach",
-        "sunroof", "panoramic roof", "panoramic glass roof", "sliding roof"
+        "panoramadach", "schiebedach", "sunroof", "panoramic roof", "panoramic glass roof", "sliding roof"
       ],
       "Digital Cockpit": [
-        "digital cockpit", "virtual cockpit", "kombiinstrument digital", "fully digital instrument cluster"
+        "digital cockpit", "virtual cockpit", "fully digital instrument cluster"
       ]
     }
   }
