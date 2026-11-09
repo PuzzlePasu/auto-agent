@@ -10,45 +10,72 @@
     "color_preference": 0.05
   },
   "scoring_rules": {
-    "target_consumption_l100km": 6.2,
-    "inactivity_threshold_runs": 3,
-    "preferred_colors": ["blau", "rot", "grau", "schwarz"],
     "desired_features": [
-      "Matrix LED-Scheinwerfer",
+      "Matrix / Adaptive LED-Scheinwerfer",
       "ACC / adaptiver Tempomat",
       "Head-Up Display",
       "Massagesitz / ErgoActive",
       "Apple CarPlay / Android Auto",
       "Mind. 2-Zonen Klimaautomatik",
-      "Sitzheizung & Lenkradheizung"
+      "Sitzheizung",
+      "Lenkradheizung"
     ],
     "feature_aliases": {
-      "Matrix LED-Scheinwerfer": [
-        "matrix", "adapt. led", "adaptive led", "glare-free", "adaptive cornering lights",
-        "led headlights", "iq.light", "scheinwerfer led", "led"
+      "Matrix / Adaptive LED-Scheinwerfer": [
+        "glare-free high beam headlights",
+        "adaptive cornering lights",
+        "glare-free",
+        "adapt. led",
+        "adaptive led",
+        "matrix",
+        "iq.light",
+        "led headlights",
+        "laser"
       ],
       "ACC / adaptiver Tempomat": [
-        "acc", "adaptive cruise control", "distance warning", "cruise control", "tempomat",
-        "abstandstempomat", "travel assist", "distronic"
+        "adaptive cruise control",
+        "abstandstempomat",
+        "acc",
+        "distronic",
+        "travel assist",
+        "distance warning"
       ],
       "Head-Up Display": [
-        "hud", "head-up display", "head up display", "head-up", "headup"
+        "head-up display",
+        "head up display",
+        "head-up",
+        "hud"
       ],
       "Massagesitz / ErgoActive": [
-        "massage", "lumbar support", "lordose", "sportsitz", "sport seats",
-        "ergoactive", "sportsitze"
+        "massage",
+        "lumbar support",
+        "ergoactive",
+        "lordose",
+        "sport seats",
+        "sportsitz"
       ],
       "Apple CarPlay / Android Auto": [
-        "apple carplay", "android auto", "carplay", "smartphone integration",
-        "integriertes streaming"
+        "apple carplay",
+        "android auto",
+        "carplay",
+        "smartphone integration"
       ],
       "Mind. 2-Zonen Klimaautomatik": [
-        "2-zone", "climatisation", "automatic air conditioning", "klimaautomatik",
-        "2-zonen", "mehrzonen"
+        "automatic air conditioning",
+        "2-zone",
+        "climatisation",
+        "klimaautomatik",
+        "2-zonen"
       ],
-      "Sitzheizung & Lenkradheizung": [
-        "shz", "heated seats", "seat heating", "heated steering wheel",
-        "sitzheizung", "lenkradheizung"
+      "Sitzheizung": [
+        "heated seats",
+        "seat heating",
+        "sitzheizung",
+        "shz"
+      ],
+      "Lenkradheizung": [
+        "heated steering wheel",
+        "lenkradheizung"
       ]
     }
   }
