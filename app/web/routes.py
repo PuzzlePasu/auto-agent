@@ -117,7 +117,6 @@ async def car_details(request: Request, car_id: int):
 
     price_history = repo.get_price_history(car_id)
 
-    # 1. first_seen fehlertolerant parsen
     first_dt = datetime.utcnow()
     if car.first_seen:
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
@@ -129,7 +128,6 @@ async def car_details(request: Request, car_id: int):
 
     days_online = max(1, (datetime.utcnow() - first_dt).days)
 
-    # 2. Preiskennzahlen berechnen
     if hasattr(search_service, "price_service") and search_service.price_service:
         price_metrics = search_service.price_service.calculate_price_metrics(price_history, car.price)
     else:
@@ -143,7 +141,6 @@ async def car_details(request: Request, car_id: int):
             "history_points": []
         }
 
-    # 3. Marktdaten-Fallback absichern
     if not getattr(car, "market_stats", None):
         car.market_stats = {
             "median_price": car.price,
@@ -151,7 +148,6 @@ async def car_details(request: Request, car_id: int):
             "total_comparable": 0
         }
 
-    # 4. Ausstattungs-Regeln aus config.json laden
     desired_features = []
     feature_aliases = {}
     if CONFIG_PATH.exists():
@@ -163,7 +159,7 @@ async def car_details(request: Request, car_id: int):
         except Exception as e:
             logger.error(f"Fehler beim Laden von config.json in car_details: {e}")
 
-    # 5. Features als Liste absichern
+    # Features als saubere Liste absichern
     if isinstance(car.features, str):
         try:
             car.features = json.loads(car.features)
@@ -171,6 +167,20 @@ async def car_details(request: Request, car_id: int):
             car.features = [f.strip() for f in car.features.split(",") if f.strip()]
     elif not isinstance(car.features, list):
         car.features = []
+
+    # Ausstattungsabgleich direkt in Python durchführen
+    feature_checks = []
+    car_text_pool = [car.title.lower()] + [str(f).lower() for f in car.features]
+
+    for feat in desired_features:
+        synonyms = feature_aliases.get(feat, [feat.lower()])
+        matched = False
+        for syn in synonyms:
+            syn_clean = syn.strip().lower()
+            if any(syn_clean in text for text in car_text_pool):
+                matched = True
+                break
+        feature_checks.append({"name": feat, "matched": matched})
 
     return templates.TemplateResponse(
         request=request,
@@ -180,8 +190,7 @@ async def car_details(request: Request, car_id: int):
             "price_history": price_history,
             "days_online": days_online,
             "price_metrics": price_metrics,
-            "desired_features": desired_features,
-            "feature_aliases": feature_aliases
+            "feature_checks": feature_checks
         }
     )
 
@@ -373,9 +382,6 @@ async def settings_save(
 
         return RedirectResponse(url="/settings?saved=true", status_code=303)
 
-    except json.JSONDecodeError as err:
-        logger.error(f"JSONDecodeError beim Speichern der Konfiguration: {err}")
-        return RedirectResponse(url=f"/settings?error=Ungueltiges+JSON:+{err.msg}", status_code=303)
     except Exception as e:
         logger.error(f"Fehler beim Speichern der Konfiguration: {e}", exc_info=True)
         return RedirectResponse(url=f"/settings?error={str(e)}", status_code=303)
@@ -421,58 +427,6 @@ async def download_car_pdf(car_id: int):
     score_tag = f"score{int(round(car.deal_score))}"
     safe_make_model = f"{car.make}-{car.model}".replace(" ", "_").lower()
     filename = f"auto-agent-{score_tag}-{safe_make_model}-{car.id}.pdf"
-
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
-
-
-@router.get("/compare/pdf")
-async def download_compare_pdf(id1: int = Query(...), id2: int = Query(...)):
-    car1 = repo.get_car_by_id(id1)
-    car2 = repo.get_car_by_id(id2)
-    if not car1 or not car2:
-        return HTMLResponse(content="Eines oder beide Fahrzeuge wurden nicht gefunden", status_code=404)
-
-    wins_c1, wins_c2 = [], []
-    if car1.price < car2.price:
-        wins_c1.append(f"Günstigerer Anschaffungspreis (-{int(car2.price - car1.price):,} EUR)")
-    elif car2.price < car1.price:
-        wins_c2.append(f"Günstigerer Anschaffungspreis (-{int(car1.price - car2.price):,} EUR)")
-
-    if car1.mileage < car2.mileage:
-        wins_c1.append(f"Geringere Laufleistung (-{car2.mileage - car1.mileage:,} km)")
-    elif car2.mileage < car1.mileage:
-        wins_c2.append(f"Geringere Laufleistung (-{car1.mileage - car2.mileage:,} km)")
-
-    if car1.power_hp > car2.power_hp:
-        wins_c1.append(f"Höhere Motorleistung (+{car1.power_hp - car2.power_hp} PS)")
-    elif car2.power_hp > car1.power_hp:
-        wins_c2.append(f"Höhere Motorleistung (+{car2.power_hp - car1.power_hp} PS)")
-
-    if car1.distance_km < car2.distance_km:
-        wins_c1.append(f"Geringere Distanz (-{round(car2.distance_km - car1.distance_km, 1)} km)")
-    elif car2.distance_km < car1.distance_km:
-        wins_c2.append(f"Geringere Distanz (-{round(car1.distance_km - car2.distance_km, 1)} km)")
-
-    if car1.deal_score > car2.deal_score:
-        wins_c1.append(f"Besserer Gesamt-Deal-Score ({car1.deal_score} vs {car2.deal_score})")
-    elif car2.deal_score > car1.deal_score:
-        wins_c2.append(f"Besserer Gesamt-Deal-Score ({car2.deal_score} vs {car1.deal_score})")
-
-    comparison_results = {
-        "wins_car1": wins_c1,
-        "wins_car2": wins_c2,
-        "overall_winner": car1 if car1.deal_score >= car2.deal_score else car2
-    }
-
-    pdf_bytes = PdfExportService.generate_comparison_report(car1, car2, comparison_results)
-
-    c1_tag = f"score{int(round(car1.deal_score))}-{car1.make}-{car1.model}".replace(" ", "_").lower()
-    c2_tag = f"score{int(round(car2.deal_score))}-{car2.make}-{car2.model}".replace(" ", "_").lower()
-    filename = f"vergleich-{c1_tag}-vs-{c2_tag}.pdf"
 
     return Response(
         content=pdf_bytes,

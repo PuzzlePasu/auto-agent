@@ -1,9 +1,4 @@
 {
-  "search_criteria": {
-    "search_page_urls": [
-      ""
-    ]
-  },
   "scoring_weights": {
     "features": 0.23,
     "market_price": 0.22,
@@ -15,52 +10,45 @@
     "color_preference": 0.05
   },
   "scoring_rules": {
+    "target_consumption_l100km": 6.2,
+    "inactivity_threshold_runs": 3,
+    "preferred_colors": ["blau", "rot", "grau", "schwarz"],
     "desired_features": [
-      "LED Scheinwerfer / Matrix LED",
-      "Abstandstempomat / ACC",
+      "Matrix LED-Scheinwerfer",
+      "ACC / adaptiver Tempomat",
       "Head-Up Display",
-      "Sportsitze / ErgoActive",
-      "Navigationssystem",
-      "Rückfahrkamera / 360 Kamera",
-      "Sitzheizung",
-      "Spurhalteassistent / Lane Assist",
-      "Totwinkel-Assistent",
-      "Panoramadach / Schiebedach",
-      "Digital Cockpit"
+      "Massagesitz / ErgoActive",
+      "Apple CarPlay / Android Auto",
+      "Mind. 2-Zonen Klimaautomatik",
+      "Sitzheizung & Lenkradheizung"
     ],
     "feature_aliases": {
-      "LED Scheinwerfer / Matrix LED": [
-        "led", "matrix", "iq.light", "laser", "led headlights", "headlights led", "adaptive lighting"
+      "Matrix LED-Scheinwerfer": [
+        "matrix", "adapt. led", "adaptive led", "glare-free", "adaptive cornering lights",
+        "led headlights", "iq.light", "scheinwerfer led", "led"
       ],
-      "Abstandstempomat / ACC": [
-        "acc", "abstand", "adaptiv", "distronic", "travel assist", "adaptive cruise control", "distance warning system", "cruise control"
+      "ACC / adaptiver Tempomat": [
+        "acc", "adaptive cruise control", "distance warning", "cruise control", "tempomat",
+        "abstandstempomat", "travel assist", "distronic"
       ],
       "Head-Up Display": [
-        "head-up", "headup", "hud", "head up display", "head-up display"
+        "hud", "head-up display", "head up display", "head-up", "headup"
       ],
-      "Sportsitze / ErgoActive": [
-        "sport", "ergo", "massage", "lordose", "sportsitz", "sport seats", "massage seats", "lumbar support"
+      "Massagesitz / ErgoActive": [
+        "massage", "lumbar support", "lordose", "sportsitz", "sport seats",
+        "ergoactive", "sportsitze"
       ],
-      "Navigationssystem": [
-        "navi", "navigation", "discover", "gps", "navigation system"
+      "Apple CarPlay / Android Auto": [
+        "apple carplay", "android auto", "carplay", "smartphone integration",
+        "integriertes streaming"
       ],
-      "Rückfahrkamera / 360 Kamera": [
-        "kamera", "rear view", "360", "surround", "area view", "rückfahr", "backup camera", "reversing camera"
+      "Mind. 2-Zonen Klimaautomatik": [
+        "2-zone", "climatisation", "automatic air conditioning", "klimaautomatik",
+        "2-zonen", "mehrzonen"
       ],
-      "Sitzheizung": [
-        "sitzheizung", "heated seats", "seat heating", "front seat heating"
-      ],
-      "Spurhalteassistent / Lane Assist": [
-        "lane assist", "spurhalte", "spurassistent", "lane keeping assist"
-      ],
-      "Totwinkel-Assistent": [
-        "totwinkel", "side assist", "blind spot", "blind spot monitor"
-      ],
-      "Panoramadach / Schiebedach": [
-        "panoramadach", "schiebedach", "sunroof", "panoramic roof", "panoramic glass roof", "sliding roof"
-      ],
-      "Digital Cockpit": [
-        "digital cockpit", "virtual cockpit", "fully digital instrument cluster"
+      "Sitzheizung & Lenkradheizung": [
+        "shz", "heated seats", "seat heating", "heated steering wheel",
+        "sitzheizung", "lenkradheizung"
       ]
     }
   }

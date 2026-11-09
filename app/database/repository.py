@@ -23,11 +23,9 @@ class DatabaseRepository:
         return conn
 
     def _init_db(self):
-        """Erstellt alle Tabellen und führt automatische Spalten-Migrationen durch."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-
-            # Haupttabelle für Fahrzeuge
+            
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cars (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +47,7 @@ class DatabaseRepository:
                     distance_km REAL,
                     features_json TEXT,
                     deal_score REAL DEFAULT 0.0,
+                    image_url TEXT DEFAULT '',
                     is_active INTEGER DEFAULT 1,
                     is_favorite INTEGER DEFAULT 0,
                     missing_runs INTEGER DEFAULT 0,
@@ -57,7 +56,6 @@ class DatabaseRepository:
                 )
             """)
 
-            # Preishistorie
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +66,6 @@ class DatabaseRepository:
                 )
             """)
 
-            # System-Logs
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS system_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,16 +75,6 @@ class DatabaseRepository:
                 )
             """)
 
-            # Automatische Migration für bestehende Datenbanken
-            cursor.execute("PRAGMA table_info(cars)")
-            cols = {row["name"] for row in cursor.fetchall()}
-
-            if "features_json" not in cols:
-                cursor.execute("ALTER TABLE cars ADD COLUMN features_json TEXT")
-            if "missing_runs" not in cols:
-                cursor.execute("ALTER TABLE cars ADD COLUMN missing_runs INTEGER DEFAULT 0")
-
-            # Indizes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_external_id ON cars(external_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_is_active ON cars(is_active)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cars_deal_score ON cars(deal_score)")
@@ -95,15 +82,7 @@ class DatabaseRepository:
 
             conn.commit()
 
-    # -------------------------------------------------------------------------
-    # Inserate speichern / aktualisieren
-    # -------------------------------------------------------------------------
     def save_or_update_car(self, car: CarListing) -> str:
-        """
-        Speichert ein neues Inserat oder aktualisiert bestehende Daten.
-        Erkennt Preisänderungen und dokumentiert sie in price_history.
-        Rückgabe: 'new', 'price_changed' oder 'duplicate'
-        """
         now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         features_json = json.dumps(car.features, ensure_ascii=False)
 
@@ -113,26 +92,24 @@ class DatabaseRepository:
             row = cursor.fetchone()
 
             if row is None:
-                # Neues Fahrzeug einfügen
                 cursor.execute("""
                     INSERT INTO cars (
                         external_id, provider, url, title, make, model,
                         price, mileage, first_registration_year, power_hp,
                         fuel_type, transmission, dealer_name, postal_code,
-                        city, distance_km, features_json, deal_score,
+                        city, distance_km, features_json, deal_score, image_url,
                         is_active, is_favorite, missing_runs, first_seen, last_seen
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
                 """, (
                     car.external_id, car.provider, car.url, car.title, car.make, car.model,
                     car.price, car.mileage, car.first_registration_year, car.power_hp,
                     car.fuel_type, car.transmission, car.dealer_name, car.postal_code,
-                    car.city, car.distance_km, features_json, car.deal_score,
+                    car.city, car.distance_km, features_json, car.deal_score, car.image_url,
                     now_str, now_str
                 ))
                 car_id = cursor.lastrowid
                 car.id = car_id
 
-                # Ersten Preiseintrag anlegen
                 cursor.execute("""
                     INSERT INTO price_history (car_id, price, recorded_at)
                     VALUES (?, ?, ?)
@@ -141,7 +118,6 @@ class DatabaseRepository:
                 conn.commit()
                 return "new"
 
-            # Bestehendes Fahrzeug aktualisieren
             car_id = row["id"]
             old_price = float(row["price"])
             car.id = car_id
@@ -157,11 +133,12 @@ class DatabaseRepository:
                     missing_runs = 0,
                     last_seen = ?,
                     features_json = ?,
-                    url = ?
+                    url = ?,
+                    image_url = ?
                 WHERE id = ?
             """, (
                 car.price, car.mileage, car.deal_score, now_str,
-                features_json, car.url, car_id
+                features_json, car.url, car.image_url, car_id
             ))
 
             if price_changed:
@@ -169,72 +146,39 @@ class DatabaseRepository:
                     INSERT INTO price_history (car_id, price, recorded_at)
                     VALUES (?, ?, ?)
                 """, (car_id, car.price, now_str))
-                conn.commit()
-                return "price_changed"
 
             conn.commit()
-            return "duplicate"
+            return "price_changed" if price_changed else "duplicate"
 
-    # -------------------------------------------------------------------------
-    # Inaktive Inserate abgleichen
-    # -------------------------------------------------------------------------
     def mark_missing_cars(self, current_listings: List[CarListing], threshold_runs: int = 3):
-        """
-        Inkrementiert missing_runs für alle Inserate, die im aktuellen Suchlauf fehlen.
-        Wird threshold_runs erreicht, wird das Inserat auf is_active = 0 gesetzt.
-        """
         current_ext_ids = {c.external_id for c in current_listings if c.external_id}
         all_active = self.get_all_cars(only_active=True, canonical_only=False)
-        deactivated_count = 0
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
             for car in all_active:
                 if car.external_id not in current_ext_ids:
-                    # Fehlende Läufe um 1 erhöhen
-                    cursor.execute("""
-                        UPDATE cars 
-                        SET missing_runs = missing_runs + 1 
-                        WHERE id = ?
-                    """, (car.id,))
-
-                    # Prüfen, ob Schwellenwert überschritten wurde
+                    cursor.execute("UPDATE cars SET missing_runs = missing_runs + 1 WHERE id = ?", (car.id,))
                     cursor.execute("SELECT missing_runs FROM cars WHERE id = ?", (car.id,))
                     res = cursor.fetchone()
                     if res and res["missing_runs"] >= threshold_runs:
                         cursor.execute("UPDATE cars SET is_active = 0 WHERE id = ?", (car.id,))
-                        deactivated_count += 1
                 else:
-                    # War im Lauf enthalten -> Reset auf 0
                     cursor.execute("UPDATE cars SET missing_runs = 0 WHERE id = ?", (car.id,))
-
             conn.commit()
 
-        if deactivated_count > 0:
-            logger.info(f"{deactivated_count} Inserate nach {threshold_runs} fehlenden Suchläufen deaktiviert.")
-
-    # -------------------------------------------------------------------------
-    # Auslese-Operationen
-    # -------------------------------------------------------------------------
     def get_all_cars(self, only_active: bool = True, canonical_only: bool = True) -> List[CarListing]:
-        """Gibt alle Fahrzeuge entsprechend der Filterkriterien zurück."""
         query = "SELECT * FROM cars WHERE 1=1"
-        params = []
-
         if only_active:
             query += " AND is_active = 1"
-
         query += " ORDER BY deal_score DESC"
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-
-            return [self._row_to_car_listing(row) for row in rows]
+            cursor.execute(query)
+            return [self._row_to_car_listing(row) for row in cursor.fetchall()]
 
     def get_car_by_id(self, car_id: int) -> Optional[CarListing]:
-        """Findet ein Fahrzeug anhand seiner internen Datenbank-ID."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM cars WHERE id = ?", (car_id,))
@@ -242,67 +186,45 @@ class DatabaseRepository:
             return self._row_to_car_listing(row) if row else None
 
     def get_price_history(self, car_id: int) -> List[Dict[str, Any]]:
-        """Gibt alle dokumentierten Preisänderungen eines Autos chronologisch zurück."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT price, recorded_at 
-                FROM price_history 
-                WHERE car_id = ? 
-                ORDER BY recorded_at ASC
+                SELECT price, recorded_at FROM price_history 
+                WHERE car_id = ? ORDER BY recorded_at ASC
             """, (car_id,))
-            rows = cursor.fetchall()
-            return [{"price": float(r["price"]), "recorded_at": r["recorded_at"]} for r in rows]
+            return [{"price": float(r["price"]), "recorded_at": r["recorded_at"]} for r in cursor.fetchall()]
 
     def toggle_favorite(self, car_id: int) -> bool:
-        """Schaltet den Favoriten-Status (Stern) eines Autos um."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT is_favorite FROM cars WHERE id = ?", (car_id,))
             row = cursor.fetchone()
             if not row:
                 return False
-
             new_status = 0 if row["is_favorite"] else 1
             cursor.execute("UPDATE cars SET is_favorite = ? WHERE id = ?", (new_status, car_id))
             conn.commit()
             return bool(new_status)
 
     def update_deal_score(self, car_id: int, new_score: float):
-        """Aktualisiert den vorberechneten Deal-Score eines Inserats."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE cars SET deal_score = ? WHERE id = ?", (new_score, car_id))
             conn.commit()
 
-    # -------------------------------------------------------------------------
-    # System-Logs
-    # -------------------------------------------------------------------------
     def log_event(self, level: str, message: str):
         now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO system_logs (level, message, created_at)
-                VALUES (?, ?, ?)
-            """, (level.upper(), message, now_str))
+            cursor.execute("INSERT INTO system_logs (level, message, created_at) VALUES (?, ?, ?)", (level.upper(), message, now_str))
             conn.commit()
 
     def get_recent_logs(self, limit: int = 5) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT level, message, created_at 
-                FROM system_logs 
-                ORDER BY id DESC 
-                LIMIT ?
-            """, (limit,))
-            rows = cursor.fetchall()
-            return [{"level": r["level"], "message": r["message"], "created_at": r["created_at"]} for r in rows]
+            cursor.execute("SELECT level, message, created_at FROM system_logs ORDER BY id DESC LIMIT ?", (limit,))
+            return [{"level": r["level"], "message": r["message"], "created_at": r["created_at"]} for r in cursor.fetchall()]
 
-    # -------------------------------------------------------------------------
-    # Hilfsmethoden
-    # -------------------------------------------------------------------------
     def _row_to_car_listing(self, row: sqlite3.Row) -> CarListing:
         features = []
         if row["features_json"]:
@@ -330,7 +252,8 @@ class DatabaseRepository:
             city=row["city"] or "Würzburg",
             distance_km=float(row["distance_km"]) if row["distance_km"] is not None else 25.0,
             features=features,
-            deal_score=float(row["deal_score"] or 0.0)
+            deal_score=float(row["deal_score"] or 0.0),
+            image_url=str(row["image_url"] or "")
         )
 
         car.is_active = bool(row["is_active"])
